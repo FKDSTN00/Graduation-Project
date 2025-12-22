@@ -231,6 +231,7 @@ def delete_folder(id):
         # 递归子文件夹
         for sub in folder.subfolders:
             delete_recursive(sub)
+            db.session.delete(sub) # 显式删除子文件夹
             
     delete_recursive(folder)
     

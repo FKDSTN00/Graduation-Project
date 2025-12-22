@@ -77,7 +77,27 @@ def create_app(config_class=Config):
     storage_client.init_app(app)
     
     # 启动后台同步线程，将 Redis 中的离线文档回写数据库
+    # 启动后台同步线程
     from .sync import start_sync_worker
     start_sync_worker(app)
+    
+    # 初始化并启动定时任务调度器
+    try:
+        from flask_apscheduler import APScheduler
+        from .tasks.scheduler import check_notifications
+        
+        scheduler = APScheduler()
+        scheduler.init_app(app)
+        scheduler.start()
+        
+        @scheduler.task('interval', id='check_notifications', minutes=1)
+        def job_check_notifications():
+            check_notifications(app)
+            
+        print("✅ Scheduler started.")
+    except ImportError:
+        print("⚠️ Flask-APScheduler not installed, skipping scheduler.")
+    except Exception as e:
+        print(f"⚠️ Scheduler start failed: {e}")
 
     return app

@@ -13,3 +13,4 @@ python-dotenv==1.0.0
 gevent>=23.0.0
 cryptography
 redis
+Flask-APScheduler==1.12.4

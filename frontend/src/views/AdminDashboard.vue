@@ -3,8 +3,13 @@
     <h2 class="page-title">{{ pageTitle }}</h2>
     <el-card class="card">
       
+      <!-- 公告管理 -->
+      <div v-if="activeTab === 'announcement'">
+        <AnnouncementManager />
+      </div>
+
       <!-- 工作流程看板 -->
-      <div v-if="activeTab === 'kanban'">
+      <div v-else-if="activeTab === 'kanban'">
         <div class="toolbar" style="justify-content: space-between;">
            <span class="hint">监控所有用户的待处理和进行中任务（按用户名排序）</span>
            <el-button type="primary" link @click="loadAdminTasks">刷新</el-button>
@@ -299,8 +304,8 @@
       </div>
 
       <!-- 日程与会议 -->
-      <div v-else-if="activeTab === 'schedule'">
-        <el-empty description="日程与会议管理功能正在开发中" />
+      <div v-else-if="activeTab === 'schedule'" style="height: 600px;">
+        <Schedule />
       </div>
 
       <!-- 审批流 -->
@@ -383,15 +388,18 @@ import { fetchUsers, banUser, deleteUser as apiDeleteUser, fetchUserDocs, fetchA
 import { getCategories, createCategory, updateCategory, deleteCategory as apiDeleteCategory, getArticles, createArticle, updateArticle, deleteArticle as apiDeleteArticle } from '../api/knowledge'
 import { defineAsyncComponent } from 'vue'
 const FileCenter = defineAsyncComponent(() => import('./Files.vue'))
+const Schedule = defineAsyncComponent(() => import('./Schedule.vue'))
+const AnnouncementManager = defineAsyncComponent(() => import('./AnnouncementManager.vue'))
 import { Delete, Rank, Close, Edit } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 
 // Active Tab logic
-const activeTab = computed(() => route.params.tab || 'kanban')
+const activeTab = computed(() => route.params.tab || 'announcement')
 
 const titleMap = {
+  announcement: '公告管理',
   kanban: '工作流程看板',
   monitor: '文档监控',
   knowledge: '知识库',

@@ -112,6 +112,12 @@ const router = createRouter({
                     meta: { title: '留言与反馈' }
                 },
                 {
+                    path: 'announcement/:id',
+                    name: 'announcement-detail',
+                    component: () => import('../views/AnnouncementDetail.vue'),
+                    meta: { title: '公告详情' }
+                },
+                {
                     path: 'admin/:tab?',
                     name: 'admin',
                     component: AdminDashboard,
@@ -144,7 +150,7 @@ router.beforeEach((to, from, next) => {
         return
     }
     // 管理员访问非后台页面时跳转到后台，但允许访问知识库页面
-    if (isAdmin && !to.path.startsWith('/admin') && !to.path.startsWith('/knowledge') && to.path !== '/login' && to.path !== '/register') {
+    if (isAdmin && !to.path.startsWith('/admin') && !to.path.startsWith('/knowledge') && !to.path.startsWith('/announcement') && to.path !== '/login' && to.path !== '/register') {
         next('/admin/kanban')
         return
     }

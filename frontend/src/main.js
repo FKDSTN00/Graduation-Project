@@ -8,8 +8,12 @@ import router from './router'
 
 const app = createApp(App)
 
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus)
+app.use(ElementPlus, {
+    locale: zhCn
+})
 
 app.mount('#app')

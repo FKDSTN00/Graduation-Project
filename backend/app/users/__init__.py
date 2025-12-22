@@ -5,7 +5,7 @@ import os
 import uuid
 from datetime import datetime
 
-from ..models.models import User
+from ..models.models import User, SystemNotification
 from ..extensions import db
 from ..utils.minio_service import upload_file_to_minio, delete_file_by_url
 
@@ -151,5 +151,70 @@ def change_password():
         db.session.commit()
         return jsonify({'msg': '密码修改成功'}), 200
     except Exception as e:
-        db.session.rollback()
         return jsonify({'msg': '修改失败', 'error': str(e)}), 500
+
+@users_bp.route('/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    """获取用户的系统通知（未读在前）"""
+    current_user_id = int(get_jwt_identity())
+    print(f"获取通知的用户ID: {current_user_id}")
+    try:
+        notifications = SystemNotification.query.filter_by(user_id=current_user_id)\
+            .order_by(SystemNotification.is_read.asc(), SystemNotification.created_at.desc())\
+            .limit(20).all() # 只取最近20条
+    except Exception as e:
+        print(f"查询通知失败: {e}")
+        return jsonify([]), 200
+    
+    return jsonify([
+        {
+            'id': n.id,
+            'title': n.title,
+            'content': n.content,
+            'is_read': n.is_read,
+            'created_at': n.created_at.isoformat(),
+            'type': n.type
+        } for n in notifications
+    ]), 200
+
+@users_bp.route('/notifications/<int:id>/read', methods=['PUT'])
+@jwt_required()
+def mark_read(id):
+    """标记通知已读"""
+    current_user_id = int(get_jwt_identity())
+    notification = SystemNotification.query.get_or_404(id)
+    
+    if notification.user_id != current_user_id:
+        return jsonify({'error': '无权限'}), 403
+        
+    notification.is_read = True
+    db.session.commit()
+    return jsonify({'message': '已读'}), 200
+
+@users_bp.route('/notifications/read-all', methods=['PUT'])
+@jwt_required()
+def mark_all_read():
+    """全部已读"""
+    current_user_id = int(get_jwt_identity())
+    try:
+        SystemNotification.query.filter_by(user_id=current_user_id, is_read=False)\
+            .update({'is_read': True})
+        db.session.commit()
+        return jsonify({'message': '全部已读成功'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@users_bp.route('/notifications/clear-all', methods=['DELETE'])
+@jwt_required()
+def clear_all_notifications():
+    """清空所有通知"""
+    current_user_id = int(get_jwt_identity())
+    try:
+        SystemNotification.query.filter_by(user_id=current_user_id).delete()
+        db.session.commit()
+        return jsonify({'message': '通知已清空'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

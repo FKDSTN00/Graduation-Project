@@ -19,14 +19,14 @@
           <template #header>
             <div class="card-header">
               <span><el-icon><Bell /></el-icon> 公告</span>
-              <el-button text>更多</el-button>
+              <el-button text @click="showAllDialog = true">更多</el-button>
             </div>
           </template>
           <div class="announcement-list">
-            <div v-for="item in announcements" :key="item.id" class="announcement-item">
+            <div v-for="item in displayedAnnouncements" :key="item.id" class="announcement-item">
               <div class="announcement-title">
                 <el-tag size="small" :type="item.type === 'important' ? 'danger' : 'primary'">{{ item.tag }}</el-tag>
-                <span class="title-text">{{ item.title }}</span>
+                <span class="title-text" @click="openDetail(item.id)">{{ item.title }}</span>
               </div>
               <span class="announcement-date">{{ item.date }}</span>
             </div>
@@ -82,6 +82,18 @@
         </el-card>
       </div>
     </div>
+    
+    <el-dialog v-model="showAllDialog" title="所有公告" width="600px">
+      <div class="announcement-list">
+        <div v-for="item in announcements" :key="item.id" class="announcement-item">
+          <div class="announcement-title">
+            <el-tag size="small" :type="item.type === 'important' ? 'danger' : 'primary'">{{ item.tag }}</el-tag>
+            <span class="title-text" @click="openDetail(item.id)">{{ item.title }}</span>
+          </div>
+          <span class="announcement-date">{{ item.date }}</span>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -91,6 +103,9 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore, useTaskStore } from '../store'
 import { DocumentAdd, List, Bell, Tickets, Calendar } from '@element-plus/icons-vue'
+import { getNotices } from '../api/notice'
+import { getEvents } from '../api/schedule'
+import dayjs from 'dayjs'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -98,20 +113,21 @@ const taskStore = useTaskStore()
 
 // Tasks from Store
 const { pendingTasks } = storeToRefs(taskStore)
-const recentTasks = computed(() => pendingTasks.value.slice(0, 2))
+const recentTasks = computed(() => {
+    // Sort by deadline ascending (nearest first)
+    const sorted = [...pendingTasks.value].sort((a, b) => {
+       if (!a.deadline) return 1
+       if (!b.deadline) return -1
+       return new Date(a.deadline) - new Date(b.deadline)
+    })
+    return sorted.slice(0, 3)
+})
 
-// Mock Data for others
-const announcements = ref([
-  { id: 1, title: '关于系统升级的通知', date: '2023-12-01', type: 'important', tag: '重要' },
-  { id: 2, title: '本周五全员大会议程', date: '2023-11-28', type: 'normal', tag: '通知' },
-  { id: 3, title: '新的报销流程说明文档', date: '2023-11-25', type: 'normal', tag: '制度' },
-  { id: 4, title: '年度体检报名开始', date: '2023-11-20', type: 'normal', tag: '福利' },
-])
+const announcements = ref([])
+const displayedAnnouncements = computed(() => announcements.value.slice(0, 8))
+const showAllDialog = ref(false)
 
-const recentMeetings = ref([
-  { id: 1, title: '产品迭代评审会', month: '12月', day: '12', time: '14:00-15:30', location: '会议室A' },
-  { id: 2, title: '技术分享会: Vue3最佳实践', month: '12月', day: '14', time: '16:00-17:00', location: '线上会议' },
-])
+const recentMeetings = ref([])
 
 const createNewDoc = () => {
   router.push('/documents/create')
@@ -127,8 +143,49 @@ const getPriorityType = (p) => {
   return map[p] || 'info'
 }
 
-onMounted(() => {
+const openDetail = (id) => {
+    const { href } = router.resolve({ name: 'announcement-detail', params: { id } })
+    window.open(href, '_blank')
+}
+
+onMounted(async () => {
     taskStore.fetchTasks()
+    
+    // Fetch Notices
+    try {
+       const res = await getNotices()
+       announcements.value = res.map(item => ({
+           id: item.id,
+           title: item.title,
+           date: dayjs(item.created_at).format('YYYY-MM-DD'),
+           type: item.level,
+           tag: item.level === 'important' ? '重要' : '普通'
+       }))
+    } catch(e) { console.error(e) }
+
+    // Fetch Meetings & Schedules
+    try {
+        const start = dayjs().format('YYYY-MM-DD')
+        const end = dayjs().add(60, 'day').format('YYYY-MM-DD')
+        const res = await getEvents({ start_date: start, end_date: end })
+        // res is already sorted by start_time
+        
+        recentMeetings.value = res.slice(0, 2).map(m => {
+            let location = '个人日程'
+            if (m.type === 'meeting') {
+                location = m.meeting_link || '会议室'
+            }
+            
+            return {
+                id: m.id,
+                title: m.title,
+                month: dayjs(m.start_time).format('MM月'),
+                day: dayjs(m.start_time).format('DD'),
+                time: `${dayjs(m.start_time).format('HH:mm')}-${dayjs(m.end_time).format('HH:mm')}`,
+                location: location
+            }
+        })
+    } catch(e) { console.error(e) }
 })
 </script>
 
@@ -162,6 +219,10 @@ onMounted(() => {
 }
 
 .dashboard-card {
+  /* Let content dictate height for side column */
+}
+
+.announcement-card {
   height: 100%;
 }
 

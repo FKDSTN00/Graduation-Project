@@ -84,6 +84,10 @@ class Schedule(db.Model):
     end_time = db.Column(db.DateTime, nullable=False, comment='结束时间')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='用户ID')
     description = db.Column(db.Text, comment='描述')
+    remind_minutes = db.Column(db.Integer, default=0, comment='提前通知时间(分钟)，0表示不通知')
+    is_notified = db.Column(db.Boolean, default=False, comment='是否已通知')
+    
+    user = db.relationship('User', backref='schedules')
 
 class Meeting(db.Model):
     """会议"""
@@ -94,6 +98,23 @@ class Meeting(db.Model):
     organizer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='组织者ID')
     attendees = db.Column(db.JSON, comment='参会人员ID列表') 
     meeting_link = db.Column(db.String(255), comment='会议链接')
+    description = db.Column(db.Text, comment='会议描述')
+    remind_minutes = db.Column(db.Integer, default=0, comment='提前通知时间(分钟)，0表示不通知')
+    is_notified = db.Column(db.Boolean, default=False, comment='是否已通知')
+    
+    organizer = db.relationship('User', backref='organized_meetings')
+
+class SystemNotification(db.Model):
+    """系统通知（针对个人的通知）"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='接收用户ID')
+    title = db.Column(db.String(255), nullable=False, comment='通知标题')
+    content = db.Column(db.Text, nullable=False, comment='通知内容')
+    is_read = db.Column(db.Boolean, default=False, comment='是否已读')
+    type = db.Column(db.String(50), default='system', comment='通知类型')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
+    
+    user = db.relationship('User', backref=db.backref('notifications', lazy='dynamic'))
 
 class ApprovalFlow(db.Model):
     """审批流程"""
@@ -112,8 +133,11 @@ class Notice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False, comment='公告标题')
     content = db.Column(db.Text, nullable=False, comment='公告内容')
+    level = db.Column(db.String(20), default='normal', comment='等级: normal/important')
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='发布人ID')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='发布时间')
+
+    author = db.relationship('User', backref='notices')
 
 class Vote(db.Model):
     """投票/问卷"""

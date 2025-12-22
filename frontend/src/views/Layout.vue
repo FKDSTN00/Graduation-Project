@@ -57,6 +57,10 @@
           </el-menu-item>
         </template>
         <template v-if="isAdmin">
+          <el-menu-item index="/admin/announcement">
+            <el-icon><Bell /></el-icon>
+            <span>公告管理</span>
+          </el-menu-item>
           <el-menu-item index="/admin/kanban">
             <el-icon><DataBoard /></el-icon>
             <span>工作流程看板</span>
@@ -82,7 +86,7 @@
             <span>审批流</span>
           </el-menu-item>
           <el-menu-item index="/admin/vote">
-            <el-icon><Bell /></el-icon>
+            <el-icon><Ticket /></el-icon>
             <span>投票与问卷</span>
           </el-menu-item>
           <el-menu-item index="/admin/users">
@@ -115,26 +119,50 @@
           <h3>企业知识协同平台</h3>
         </div>
         <div class="header-right">
-          <el-popover
-            placement="bottom"
-            :width="300"
-            trigger="click"
-            popper-class="notification-popover"
-          >
-            <template #reference>
-              <el-button circle style="margin-right: 16px">
-                <el-icon><Bell /></el-icon>
-              </el-button>
-            </template>
-            <div class="notification-panel">
-              <div class="notification-header" style="padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--el-border-color-light); font-weight: bold;">
-                通知中心
-              </div>
-              <div class="notification-body" style="max-height: 300px; overflow-y: auto;">
-                <el-empty description="暂无新通知" :image-size="80"></el-empty>
-              </div>
+          <div class="notification-container" v-click-outside="onClickOutside">
+            <el-badge :value="unreadCount" :hidden="unreadCount === 0" style="margin-right: 16px; margin-top: 5px;">
+                <el-button circle @click="popoverVisible = !popoverVisible">
+                  <el-icon><Bell /></el-icon>
+                </el-button>
+            </el-badge>
+            <div class="notification-dropdown" v-show="popoverVisible">
+                <div class="notification-panel">
+                  <div class="notification-header" style="padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--el-border-color-light); font-weight: bold; display: flex; justify-content: space-between;">
+                    <span>通知中心</span>
+                    <el-button link type="primary" size="small" @click="loadNotifications">刷新</el-button>
+                  </div>
+                  <div class="notification-body" style="max-height: 300px; overflow-y: auto;">
+                    <el-empty v-if="notifications.length === 0" description="暂无新通知" :image-size="80"></el-empty>
+                    <div v-else class="notification-list">
+                      <div 
+                        v-for="item in notifications" 
+                        :key="item.id" 
+                        class="notification-item" 
+                        :class="{ unread: !item.is_read }"
+                        @click="handleViewNotification(item)"
+                      >
+                        <div class="notif-icon">
+                           <el-icon v-if="item.type==='meeting'" color="#67C23A"><el-icon><Calendar /></el-icon></el-icon>
+                           <el-icon v-else color="#409EFF"><Bell /></el-icon>
+                        </div>
+                        <div class="notif-info">
+                            <div class="notif-title">{{ item.title }}</div>
+                            <div class="notif-content">{{ item.content }}</div>
+                            <div class="notif-time">{{ formatTime(item.created_at) }}</div>
+                        </div>
+                        <div class="notif-status" v-if="!item.is_read">
+                            <span class="dot"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="notification-footer">
+                     <el-button size="small" type="primary" link @click="handleMarkAllRead">全部已读</el-button>
+                     <el-button size="small" type="danger" link @click="handleClearAll">清空</el-button>
+                  </div>
+                </div>
             </div>
-          </el-popover>
+          </div>
           <el-switch
             v-model="isDark"
             inline-prompt
@@ -167,6 +195,19 @@
       </el-main>
     </el-container>
   </el-container>
+
+  <el-dialog v-model="detailDialogVisible" title="通知详情" width="400px" append-to-body>
+    <div v-if="currentNotification">
+        <h3 style="margin-top:0;">{{ currentNotification.title }}</h3>
+        <p style="white-space: pre-wrap; color: var(--el-text-color-regular); line-height: 1.6;">{{ currentNotification.content }}</p>
+        <div style="margin-top: 15px; color: var(--el-text-color-secondary); font-size: 12px; text-align: right;">
+        {{ currentNotification.created_at ? dayjs.utc(currentNotification.created_at).local().format('YYYY-MM-DD HH:mm:ss') : '' }}
+        </div>
+    </div>
+    <template #footer>
+        <el-button type="primary" @click="detailDialogVisible = false">知道了</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -180,12 +221,82 @@ import {
   House, List, Ticket
 } from '@element-plus/icons-vue'
 
+import { ElMessage, ClickOutside as vClickOutside } from 'element-plus'
+import { getNotifications, markRead, markAllRead, clearAllNotifications } from '../api/user'
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+dayjs.extend(utc)
+
 const router = useRouter()
 const userStore = useUserStore()
 const isDark = ref(false)
 const isLoggingOut = ref(false)
 const isMobile = ref(false)
 const sidebarVisible = ref(false)
+const detailDialogVisible = ref(false)
+const currentNotification = ref({})
+const popoverVisible = ref(false)
+
+const onClickOutside = () => {
+    if (detailDialogVisible.value) return
+    popoverVisible.value = false
+}
+
+// 通知逻辑
+const notifications = ref([])
+const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+
+const loadNotifications = async () => {
+    try {
+        const res = await getNotifications()
+        if (Array.isArray(res)) {
+            notifications.value = res
+        }
+    } catch(e) {
+        console.error('获取通知失败', e)
+    }
+}
+
+const handleRead = async (item) => {
+    if (!item.is_read) {
+        try {
+            await markRead(item.id)
+            item.is_read = true
+        } catch(e) {}
+    }
+}
+
+const handleViewNotification = (item) => {
+    currentNotification.value = item
+    detailDialogVisible.value = true
+    // 标记已读
+    handleRead(item)
+}
+
+const handleMarkAllRead = async () => {
+    try {
+        await markAllRead()
+        notifications.value.forEach(n => n.is_read = true)
+        ElMessage.success('全部已读')
+    } catch(e) {
+        ElMessage.error('操作失败')
+    }
+}
+
+const handleClearAll = async () => {
+    try {
+        await clearAllNotifications()
+        notifications.value = []
+        ElMessage.success('通知已清空')
+    } catch(e) {
+        ElMessage.error('操作失败')
+    }
+}
+
+const formatTime = (iso) => {
+    // 后端存储的是UTC时间，需要转换为本地时间
+    return dayjs.utc(iso).local().format('MM-DD HH:mm')
+}
 
 const displayName = computed(() => {
   if (isLoggingOut.value) return '正在退出...'
@@ -219,21 +330,21 @@ const goToPersonalCenter = () => {
 }
 
 const handleLogout = () => {
-  // 设置退出状态
   isLoggingOut.value = true
-  
-  // 清除所有数据
   localStorage.removeItem('token')
   localStorage.removeItem('userInfo')
   sessionStorage.removeItem('privacy_token')
   sessionStorage.removeItem('privacy_password')
   sessionStorage.removeItem('privacy_last_access')
   
-  // 使用 nextTick 确保状态更新后再跳转
+  if (pollTimer) clearInterval(pollTimer)
+
   setTimeout(() => {
     window.location.href = '/login'
   }, 0)
 }
+
+let pollTimer = null
 
 onMounted(async () => {
   const theme = localStorage.getItem('theme')
@@ -242,7 +353,6 @@ onMounted(async () => {
     document.documentElement.classList.add('dark')
   }
   
-  // 如果 store 中没有用户信息，从后端获取
   if (!userStore.userInfo && userStore.token) {
     try {
       const request = (await import('../api/request')).default
@@ -250,13 +360,19 @@ onMounted(async () => {
       userStore.setUserInfo(res)
     } catch (error) {
       console.error('获取用户信息失败:', error)
-      // 如果获取失败且是401错误，说明token过期，跳转登录
       if (error.response?.status === 401) {
         userStore.logout()
         router.push('/login')
       }
     }
   }
+
+  // 启动通知轮询 (缩短为10秒)
+  loadNotifications()
+  pollTimer = setInterval(loadNotifications, 10000)
+
+  // 页面可见时立即刷新
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onMounted(() => {
@@ -264,8 +380,16 @@ onMounted(() => {
   window.addEventListener('resize', checkMobile)
 })
 
+const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+        loadNotifications()
+    }
+}
+
 onBeforeUnmount(() => {
   window.removeEventListener('resize', checkMobile)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 
@@ -396,4 +520,113 @@ onBeforeUnmount(() => {
 .fade-leave-to {
   opacity: 0;
 }
+
+
+.notification-container {
+  position: relative;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: 40px;
+  right: -80px;
+  width: 320px;
+  background-color: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
+  box-shadow: var(--el-box-shadow-light);
+  border-radius: 4px;
+  z-index: 2000;
+  padding: 0;
+}
+
+.notification-popover {
+  padding: 0 !important;
+}
+
+.notification-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.notification-header {
+  padding: 10px;
+  border-bottom: 1px solid var(--el-border-color-ligher);
+}
+
+.notification-body {
+  max-height: 300px; 
+  overflow-y: auto;
+}
+
+.notification-footer {
+  padding: 8px 10px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.notification-item {
+  padding: 10px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+.notification-item:hover {
+  background-color: var(--el-fill-color-light);
+}
+
+.notification-item.unread {
+  background-color: var(--el-color-primary-light-9);
+}
+
+.notif-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.notif-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.notif-title {
+  font-weight: bold;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  margin-bottom: 4px;
+}
+
+.notif-content {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.notif-time {
+  font-size: 10px;
+  color: var(--el-text-color-placeholder);
+}
+
+.notif-status {
+  display: flex;
+  align-items: center;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--el-color-danger);
+  border-radius: 50%;
+}
 </style>
+

@@ -36,6 +36,7 @@ services:
       - AI_API_URL=http://ollama:11434/v1
       - AI_MODEL_NAME=deepseek-r1:1.5b
       - REDIS_URL=redis://redis:6379/0
+      - TZ=Asia/Shanghai
     depends_on:
       - mysql
       - elasticsearch
