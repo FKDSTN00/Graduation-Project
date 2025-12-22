@@ -1,0 +1,150 @@
+services:
+  frontend:
+    container_name: frontend
+    restart: unless-stopped
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=/api
+    depends_on:
+      - backend
+
+  backend:
+    container_name: backend
+    restart: unless-stopped
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../backend:/app
+    environment:
+      - FLASK_APP=app
+      - FLASK_ENV=development
+      - DATABASE_URL=mysql+pymysql://user:user@mysql/db
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - AI_API_URL=http://ollama:11434/v1
+      - AI_MODEL_NAME=deepseek-r1:1.5b
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - mysql
+      - elasticsearch
+      - minio
+      - ollama
+      - redis
+
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: user
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    command: >
+      bash -c "
+        if ! bin/elasticsearch-plugin list | grep analysis-ik; then
+          bin/elasticsearch-plugin install --batch https://get.infini.cloud/elasticsearch/analysis-ik/8.12.0;
+        fi &&
+        /usr/local/bin/docker-entrypoint.sh eswrapper
+      "
+
+  minio:
+    container_name: minio
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  redis:
+    container_name: redis
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  nginx:
+    container_name: nginx
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+  scheduler:
+    container_name: scheduler
+    image: mcuadros/ofelia:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      ofelia.job-exec.cleanup-recycle-bin.schedule: "0 2 * * *" # 每天凌晨2点执行
+      ofelia.job-exec.cleanup-recycle-bin.container: "backend"
+      ofelia.job-exec.cleanup-recycle-bin.command: "python3 scripts/cleanup_recycle_bin.py"
+
+volumes:
+  mysql_data:
+  es_data:
+  minio_data:
+  ollama_data:
+  redis_data:
