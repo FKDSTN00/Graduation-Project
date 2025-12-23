@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models.models import Notice, Vote, User
 from ..extensions import db
-from datetime import datetime
+from datetime import datetime, timedelta
 
 notice_bp = Blueprint('notice', __name__)
 
@@ -49,7 +49,8 @@ def create_notice():
         title=data['title'],
         content=data['content'],
         level=level,
-        author_id=current_user_id
+        author_id=current_user_id,
+        created_at=datetime.utcnow() + timedelta(hours=8)
     )
     db.session.add(notice)
     db.session.commit()
@@ -101,8 +102,134 @@ def delete_notice(id):
     db.session.commit()
     return jsonify({'message': '公告删除成功'}), 200
 
-@notice_bp.route('/vote', methods=['POST'])
+from ..models.models import Notice, Vote, VoteRecord, User
+
+# ... (Previous notice routes remain unchanged, just append new routes)
+
+# ==================== 投票管理 ====================
+
+@notice_bp.route('/votes', methods=['GET'])
+@jwt_required()
+def get_votes():
+    """获取投票列表"""
+    current_user_id = int(get_jwt_identity())
+    votes = Vote.query.order_by(Vote.created_at.desc()).all()
+    
+    result = []
+    for v in votes:
+        # Check if user has voted
+        record = VoteRecord.query.filter_by(vote_id=v.id, user_id=current_user_id).first()
+        user_voted_key = record.option_key if record else None
+        
+        # Calculate stats
+        total_count = VoteRecord.query.filter_by(vote_id=v.id).count()
+        options_stats = []
+        if v.options:
+            for opt in v.options:
+                count = VoteRecord.query.filter_by(vote_id=v.id, option_key=opt['key']).count()
+                options_stats.append({
+                    'key': opt['key'],
+                    'label': opt['label'],
+                    'count': count,
+                    'percent': round((count / total_count * 100), 1) if total_count > 0 else 0
+                })
+        
+        result.append({
+            'id': v.id,
+            'title': v.title,
+            'created_at': v.created_at.isoformat() if v.created_at else None,
+            'end_time': v.end_time.isoformat() if v.end_time else None,
+            'options': options_stats,
+            'total_count': total_count,
+            'user_voted_key': user_voted_key,
+            'is_active': (v.end_time is None or v.end_time > datetime.utcnow() + timedelta(hours=8))
+        })
+        
+    return jsonify(result), 200
+
+@notice_bp.route('/votes', methods=['POST'])
 @jwt_required()
 def create_vote():
-    """发起投票 (Placeholder from previous code)"""
-    return jsonify({"msg": "投票功能暂未完整实现"}), 201
+    """发起投票 (管理员)"""
+    current_user_id = int(get_jwt_identity())
+    user = User.query.get(current_user_id)
+    if user.role != 'admin':
+        return jsonify({'error': 'No permission'}), 403
+        
+    data = request.get_json()
+    title = data.get('title')
+    options = data.get('options') # List of {key, label}
+    end_time_str = data.get('end_time')
+    
+    if not title or not options:
+        return jsonify({'error': 'Missing title or options'}), 400
+        
+    end_time = None
+    if end_time_str:
+        try:
+            # Frontend sends local time string, allow generic parsing or ISO
+            end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+        except:
+            pass
+            
+    vote = Vote(
+        title=title,
+        options=options,
+        created_by=current_user_id,
+        end_time=end_time,
+        created_at=datetime.utcnow() + timedelta(hours=8)
+    )
+    db.session.add(vote)
+    db.session.commit()
+    
+    return jsonify({'message': '投票创建成功', 'id': vote.id}), 201
+
+@notice_bp.route('/votes/<int:id>/submit', methods=['POST'])
+@jwt_required()
+def submit_vote(id):
+    """提交投票"""
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+    option_key = data.get('option_key')
+    
+    vote = Vote.query.get_or_404(id)
+    
+    # Check deadline
+    now = datetime.utcnow() + timedelta(hours=8)
+    if vote.end_time and vote.end_time < now:
+        return jsonify({'error': '投票已结束'}), 400
+        
+    # Check if already voted
+    existing = VoteRecord.query.filter_by(vote_id=id, user_id=current_user_id).first()
+    if existing:
+        return jsonify({'error': '您已投过票'}), 400
+        
+    # Check option validity
+    valid_keys = [opt['key'] for opt in vote.options]
+    if option_key not in valid_keys:
+        return jsonify({'error': '无效选项'}), 400
+        
+    record = VoteRecord(
+        vote_id=id,
+        user_id=current_user_id,
+        option_key=option_key,
+        created_at=now
+    )
+    db.session.add(record)
+    db.session.commit()
+    
+    return jsonify({'message': '投票成功'}), 200
+
+@notice_bp.route('/votes/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_vote(id):
+    """删除投票 (管理员)"""
+    current_user_id = int(get_jwt_identity())
+    user = User.query.get(current_user_id)
+    if user.role != 'admin':
+        return jsonify({'error': 'No permission'}), 403
+        
+    vote = Vote.query.get_or_404(id)
+    db.session.delete(vote)
+    db.session.commit()
+    return jsonify({'message': '投票删除成功'}), 200

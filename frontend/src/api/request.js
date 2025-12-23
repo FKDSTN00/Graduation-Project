@@ -12,21 +12,21 @@ request.interceptors.request.use(
         // 从 localStorage 获取 token
         const token = localStorage.getItem('token')
         console.log('请求拦截器 - URL:', config.url, 'Token存在:', !!token)
-        
+
         if (token) {
             // 如果有 token，添加到请求头中
             config.headers['Authorization'] = `Bearer ${token}`
         } else {
             console.warn('警告: 请求没有 JWT token!')
         }
-        
+
         // 如果请求中包含隐私空间令牌，添加到请求头
         const privacyToken = sessionStorage.getItem('privacy_token')
         if (privacyToken && (config.url.includes('/docs/') || config.url.includes('/privacy/'))) {
             config.headers['X-Privacy-Token'] = privacyToken
             console.log('添加隐私令牌到请求头')
         }
-        
+
         return config
     },
     error => {
@@ -50,7 +50,7 @@ request.interceptors.response.use(
             const isPrivacyEndpoint = requestUrl.includes('/privacy/')
             const isPrivacyDoc = requestUrl.includes('/docs/') && (hasPrivacyHeader || error.config?.params?.privacy_space)
             const isPrivacyRequest = isPrivacyEndpoint || isPrivacyDoc
-            
+
             // 如果是隐私空间相关的 401（访问令牌过期），不强制退出登录
             // 只是让隐私空间模块自己处理重新验证
             if (isPrivacyRequest && requestUrl !== '/privacy/check-password') {
@@ -58,7 +58,7 @@ request.interceptors.response.use(
                 console.log('隐私空间访问令牌过期，需要重新验证')
                 return Promise.reject(error)
             }
-            
+
             // 其他 401 错误（JWT token 过期），才需要退出登录
             if (currentPath !== '/login' && currentPath !== '/register') {
                 console.error('JWT token 过期或无效，需要重新登录')

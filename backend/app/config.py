@@ -40,3 +40,10 @@ class Config:
     # 文件上传配置
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
+    # Email Configuration
+    MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.qq.com'
+    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 465)
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL') == 'True' or True
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'your_email@qq.com'
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'your_auth_code'
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'your_email@qq.com'

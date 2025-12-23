@@ -42,3 +42,34 @@ export function getNotice(id) {
         method: 'get'
     })
 }
+
+// 投票 API
+export function getVotes() {
+    return request({
+        url: '/notice/votes',
+        method: 'get'
+    })
+}
+
+export function createVote(data) {
+    return request({
+        url: '/notice/votes',
+        method: 'post',
+        data
+    })
+}
+
+export function submitVote(id, option_key) {
+    return request({
+        url: `/notice/votes/${id}/submit`,
+        method: 'post',
+        data: { option_key }
+    })
+}
+
+export function deleteVote(id) {
+    return request({
+        url: `/notice/votes/${id}`,
+        method: 'delete'
+    })
+}

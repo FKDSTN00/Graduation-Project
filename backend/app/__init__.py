@@ -24,6 +24,9 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     cors.init_app(app)
     
+    from .extensions import mail
+    mail.init_app(app)
+    
     # 初始化 Redis 客户端，供需要缓存或队列的模块使用
     from redis import Redis
     from . import extensions
@@ -73,6 +76,9 @@ def create_app(config_class=Config):
     from .files import files_bp
     app.register_blueprint(files_bp, url_prefix='/api/files')       # 文件中心
     
+    from .feedback.routes import feedback_bp
+    app.register_blueprint(feedback_bp, url_prefix='/api/feedback') # 留言反馈
+
     from .utils.storage import storage_client
     storage_client.init_app(app)
     

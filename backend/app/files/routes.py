@@ -5,7 +5,7 @@ from ..extensions import db
 from ..utils.storage import storage_client
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 files_bp = Blueprint('files', __name__)
 
@@ -80,7 +80,8 @@ def create_folder():
     folder = FileCenterFolder(
         name=name,
         parent_id=parent_id,
-        creator_id=current_user_id
+        creator_id=current_user_id,
+        created_at=datetime.utcnow() + timedelta(hours=8)
     )
     db.session.add(folder)
     db.session.commit()
@@ -125,7 +126,8 @@ def upload_file():
         size=size,
         type=ext.replace('.', '') if ext else 'unknown',
         folder_id=parent_id,
-        uploader_id=current_user_id
+        uploader_id=current_user_id,
+        created_at=datetime.utcnow() + timedelta(hours=8)
     )
     db.session.add(new_file)
     db.session.commit()

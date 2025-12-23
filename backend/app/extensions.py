@@ -3,6 +3,7 @@ from flask_jwt_extended import JWTManager
 from flask_socketio import SocketIO
 from flask_migrate import Migrate
 from flask_cors import CORS
+from flask_mail import Mail
 
 # 初始化数据库 ORM，用于管理 SQLAlchemy 会话与模型
 db = SQLAlchemy()
@@ -18,6 +19,9 @@ migrate = Migrate()
 
 # 初始化跨域资源共享 (CORS)，允许前端域名访问后端接口
 cors = CORS()
+
+# 初始化邮件发送组件
+mail = Mail()
 
 # Redis 客户端占位符，真实实例在 create_app 中创建
 redis_client = None

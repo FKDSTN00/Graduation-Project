@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
 from ..models.models import KnowledgeCategory, KnowledgeArticle, User
+from datetime import datetime, timedelta
 
 bp = Blueprint('knowledge', __name__, url_prefix='/api/knowledge')
 
@@ -154,7 +155,9 @@ def create_article():
         title=title,
         content=content,
         category_id=data.get('category_id'),
-        author_id=user_id
+        author_id=user_id,
+        created_at=datetime.utcnow() + timedelta(hours=8),
+        updated_at=datetime.utcnow() + timedelta(hours=8)
     )
     
     db.session.add(article)

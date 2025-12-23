@@ -128,6 +128,8 @@ class ApprovalFlow(db.Model):
     details = db.Column(db.JSON, comment='申请详情数据')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='申请时间')
 
+    applicant = db.relationship('User', backref='approval_flows')
+
 class Notice(db.Model):
     """公告"""
     id = db.Column(db.Integer, primary_key=True)
@@ -143,9 +145,57 @@ class Vote(db.Model):
     """投票/问卷"""
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False, comment='投票标题')
-    options = db.Column(db.JSON, comment='选项列表')
+    options = db.Column(db.JSON, comment='选项列表') # [{"key": "opt1", "label": "选项1"}, ...]
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='创建人ID')
     end_time = db.Column(db.DateTime, comment='截止时间')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
+
+    records = db.relationship('VoteRecord', backref='vote', lazy='dynamic', cascade='all, delete-orphan')
+
+class VoteRecord(db.Model):
+    """投票记录"""
+    id = db.Column(db.Integer, primary_key=True)
+    vote_id = db.Column(db.Integer, db.ForeignKey('vote.id'), nullable=False, comment='投票ID')
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='用户ID')
+    option_key = db.Column(db.String(50), nullable=False, comment='选项标识')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='投票时间')
+
+class Feedback(db.Model):
+    """留言/反馈帖子"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False, comment='标题')
+    content = db.Column(db.Text, nullable=False, comment='内容')
+    category = db.Column(db.String(50), default='message', comment='分类: bug/suggestion/message')
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='发帖人ID')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
+    view_count = db.Column(db.Integer, default=0, comment='浏览量')
+
+    user = db.relationship('User', backref='feedbacks')
+    replies = db.relationship('FeedbackReply', backref='feedback', lazy='dynamic', cascade='all, delete-orphan')
+
+class FeedbackReply(db.Model):
+    """留言/反馈回复"""
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False, comment='回复内容')
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='回复人ID')
+    feedback_id = db.Column(db.Integer, db.ForeignKey('feedback.id'), nullable=False, comment='所属帖子ID')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='回复时间')
+
+    user = db.relationship('User', backref='feedback_replies')
+
+class FeedbackLike(db.Model):
+    """帖子点赞"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    feedback_id = db.Column(db.Integer, db.ForeignKey('feedback.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class FeedbackReplyLike(db.Model):
+    """回复点赞"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reply_id = db.Column(db.Integer, db.ForeignKey('feedback_reply.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class KanbanList(db.Model):
     """看板列"""

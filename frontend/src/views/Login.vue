@@ -128,10 +128,15 @@ const handleResetPassword = async () => {
     return
   }
   
-  // 模拟发送重置请求
-  ElMessage.success('重置密码申请已发送给管理员')
-  forgotPasswordVisible.value = false
-  forgotPasswordForm.value = { username: '', email: '' }
+  try {
+    const res = await request.post('/auth/forgot-password', forgotPasswordForm.value)
+    ElMessage.success(res.msg || '申请已提交')
+    forgotPasswordVisible.value = false
+    forgotPasswordForm.value = { username: '', email: '' }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.msg || '申请提交失败')
+  }
 }
 </script>
 

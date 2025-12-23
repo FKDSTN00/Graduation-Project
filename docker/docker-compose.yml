@@ -37,6 +37,13 @@ services:
       - AI_MODEL_NAME=deepseek-r1:1.5b
       - REDIS_URL=redis://redis:6379/0
       - TZ=Asia/Shanghai
+      # 邮件配置 (请替换为真实信息)
+      - MAIL_SERVER=smtp.qq.com
+      - MAIL_PORT=465
+      - MAIL_USE_SSL=True
+      - MAIL_USERNAME=1925396019@qq.com
+      - MAIL_PASSWORD=swudjtuembbrchdf
+      - MAIL_DEFAULT_SENDER=1925396019@qq.com
     depends_on:
       - mysql
       - elasticsearch

@@ -309,13 +309,14 @@
       </div>
 
       <!-- 审批流 -->
-      <div v-else-if="activeTab === 'approval'">
-        <el-empty description="审批流管理功能正在开发中" />
+      <div v-else-if="activeTab === 'approval'" style="height: 600px;">
+        <Approval />
       </div>
 
       <!-- 投票与问卷 -->
+      <!-- 投票与问卷 -->
       <div v-else-if="activeTab === 'vote'">
-        <el-empty description="投票与问卷管理功能正在开发中" />
+        <Votes />
       </div>
 
       <!-- 用户管理 -->
@@ -349,8 +350,9 @@
       </div>
 
       <!-- 留言与反馈 -->
+      <!-- 留言与反馈 -->
       <div v-else-if="activeTab === 'feedback'">
-        <el-empty description="留言与反馈功能正在开发中" />
+        <Feedback />
       </div>
 
       <!-- 系统级备份与恢复 -->
@@ -389,7 +391,10 @@ import { getCategories, createCategory, updateCategory, deleteCategory as apiDel
 import { defineAsyncComponent } from 'vue'
 const FileCenter = defineAsyncComponent(() => import('./Files.vue'))
 const Schedule = defineAsyncComponent(() => import('./Schedule.vue'))
+const Approval = defineAsyncComponent(() => import('./Approval.vue'))
 const AnnouncementManager = defineAsyncComponent(() => import('./AnnouncementManager.vue'))
+const Votes = defineAsyncComponent(() => import('./Votes.vue'))
+const Feedback = defineAsyncComponent(() => import('./Feedback.vue'))
 import { Delete, Rank, Close, Edit } from '@element-plus/icons-vue'
 
 const route = useRoute()

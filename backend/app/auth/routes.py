@@ -56,3 +56,43 @@ def register():
     db.session.commit()
     
     return jsonify({"msg": "用户注册成功"}), 201
+
+from ..models.models import ApprovalFlow
+from datetime import datetime, timedelta
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+def request_password_reset():
+    """申请重置密码"""
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    
+    user = User.query.filter_by(username=username, email=email).first()
+    if not user:
+        return jsonify({"msg": "用户名和邮箱不匹配或用户不存在"}), 400
+        
+    # Check if a pending request already exists
+    pending = ApprovalFlow.query.filter(
+        ApprovalFlow.applicant_id == user.id,
+        ApprovalFlow.type == 'password_reset',
+        ApprovalFlow.status == 'pending'
+    ).first()
+    
+    if pending:
+        return jsonify({"msg": "您已有一个待处理的重置申请"}), 400
+        
+    # Create Approval Request for Admin
+    title = f"{username}忘记密码，申请重置密码"
+    approval = ApprovalFlow(
+        title=title,
+        applicant_id=user.id,
+        type='password_reset',
+        status='pending',
+        details={'reason': '用户忘记密码申请重置', 'target_user_id': user.id},
+        created_at=datetime.utcnow() + timedelta(hours=8)
+    )
+    
+    db.session.add(approval)
+    db.session.commit()
+    
+    return jsonify({"msg": "申请已提交，请等待管理员审核"}), 200
