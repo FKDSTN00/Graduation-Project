@@ -358,13 +358,22 @@
       <!-- 系统级备份与恢复 -->
       <div v-else-if="activeTab === 'backup'">
         <div class="toolbar">
-          <el-button type="primary" @click="exportAll">导出全量备份</el-button>
-          <el-button type="success" @click="importAll">导入备份文件</el-button>
-          <span class="hint">用于管理员操作所有用户的偏好与文档数据（当前为占位操作）。</span>
+          <el-button type="primary" :loading="exporting" @click="handleExportBackup">导出全量备份</el-button>
+          <el-upload
+            class="upload-backup"
+            action="#"
+            :http-request="handleImportBackup"
+            :show-file-list="false"
+            accept=".sql"
+            style="display: inline-block; margin-left: 12px; margin-right: 12px;"
+          >
+            <el-button type="success">导入备份文件</el-button>
+          </el-upload>
+          <span class="hint">用于管理员备份与恢复整个数据库。请谨慎操作，恢复将覆盖现有数据！</span>
         </div>
-        <el-result icon="warning" title="注意">
-          <template #sub-title>后端尚无管理员全量备份接口，当前按钮仅做前端占位提示。</template>
-        </el-result>
+        <el-alert title="操作提示" type="info" :closable="false" show-icon>
+            导出操作将下载当前系统所有数据的SQL文件。导入操作将清除当前数据库并应用上传的SQL文件，此过程不可逆。
+        </el-alert>
       </div>
 
     </el-card>
@@ -384,9 +393,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import dayjs from 'dayjs'
-import { fetchUsers, banUser, deleteUser as apiDeleteUser, fetchUserDocs, fetchAdminTasks, monitorDocuments } from '../api/admin'
+import { fetchUsers, banUser, deleteUser as apiDeleteUser, fetchUserDocs, fetchAdminTasks, monitorDocuments, exportBackup, importBackup, getMonitorKeywords, addMonitorKeyword as apiAddMonitorKeyword, deleteMonitorKeyword as apiDeleteMonitorKeyword } from '../api/admin'
 import { getCategories, createCategory, updateCategory, deleteCategory as apiDeleteCategory, getArticles, createArticle, updateArticle, deleteArticle as apiDeleteArticle } from '../api/knowledge'
 import { defineAsyncComponent } from 'vue'
 const FileCenter = defineAsyncComponent(() => import('./Files.vue'))
@@ -430,7 +439,7 @@ const currentUserDocs = ref([])
 const flaggedDocs = ref([])
 const loadingMonitor = ref(false)
 const monitorKeyword = ref('')
-const monitorKeywords = ref(JSON.parse(localStorage.getItem('admin_monitor_keywords')) || [])
+const monitorKeywords = ref([])
 const previewDialogVisible = ref(false)
 const previewDoc = ref(null)
 
@@ -474,6 +483,9 @@ onMounted(() => {
     loadKnowledgeCategories()
     loadKnowledgeArticles()
   }
+  if (activeTab.value === 'monitor') {
+    loadMonitorKeywords()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -494,6 +506,9 @@ watch(activeTab, (newTab) => {
   if (newTab === 'knowledge') {
     loadKnowledgeCategories()
     loadKnowledgeArticles()
+  }
+  if (newTab === 'monitor') {
+    loadMonitorKeywords()
   }
 })
 
@@ -574,7 +589,16 @@ const removeUser = (user) => {
 }
 
 // Monitor Actions
-const addMonitorKeyword = () => {
+const loadMonitorKeywords = async () => {
+  try {
+    const res = await getMonitorKeywords()
+    monitorKeywords.value = res.map(k => k.keyword)
+  } catch (error) {
+    console.error('加载监控关键词失败', error)
+  }
+}
+
+const addMonitorKeyword = async () => {
   const kw = monitorKeyword.value.trim()
   if (!kw) {
     ElMessage.warning('请输入关键词')
@@ -584,19 +608,33 @@ const addMonitorKeyword = () => {
     ElMessage.warning('关键词已存在')
     return
   }
-  monitorKeywords.value.push(kw)
-  // 保存到 localStorage
-  localStorage.setItem('admin_monitor_keywords', JSON.stringify(monitorKeywords.value))
-  monitorKeyword.value = ''  // 清空输入框，方便添加下一个关键词
+  
+  try {
+    await apiAddMonitorKeyword(kw)
+    monitorKeywords.value.push(kw)
+    monitorKeyword.value = ''
+    ElMessage.success('添加成功')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.msg || '添加失败')
+  }
 }
 
-const removeMonitorKeyword = (idx) => {
-  monitorKeywords.value.splice(idx, 1)
-  // 保存到 localStorage
-  localStorage.setItem('admin_monitor_keywords', JSON.stringify(monitorKeywords.value))
-  // 如果删除后没有关键词，清空结果
-  if (monitorKeywords.value.length === 0) {
-    flaggedDocs.value = []
+const removeMonitorKeyword = async (idx) => {
+  const keyword = monitorKeywords.value[idx]
+  try {
+    // 需要找到对应的 id
+    const res = await getMonitorKeywords()
+    const keywordObj = res.find(k => k.keyword === keyword)
+    if (keywordObj) {
+      await apiDeleteMonitorKeyword(keywordObj.id)
+      monitorKeywords.value.splice(idx, 1)
+      if (monitorKeywords.value.length === 0) {
+        flaggedDocs.value = []
+      }
+      ElMessage.success('删除成功')
+    }
+  } catch (error) {
+    ElMessage.error('删除失败')
   }
 }
 
@@ -640,12 +678,62 @@ const markNormal = (doc) => {
 }
 
 // Backup Actions
-const exportAll = () => {
-  ElMessage.info('导出全量备份：当前为占位操作，请接入后端接口')
+const exporting = ref(false)
+
+const handleExportBackup = async () => {
+  exporting.value = true
+  try {
+    const res = await exportBackup()
+    if (res.type === 'application/json') {
+       const reader = new FileReader()
+       reader.onload = () => {
+           let msg = '导出失败'
+           try {
+             msg = JSON.parse(reader.result).msg || msg
+           } catch(e) {}
+           ElMessage.error(msg)
+       }
+       reader.readAsText(res)
+       return
+    }
+    const url = window.URL.createObjectURL(new Blob([res]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `system_backup_${dayjs().format('YYYYMMDDHHmmss')}.sql`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    ElMessage.success('备份下载成功')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('导出失败')
+  } finally {
+    exporting.value = false
+  }
 }
 
-const importAll = () => {
-  ElMessage.info('导入备份：当前为占位操作，请接入后端接口')
+const handleImportBackup = async (options) => {
+   ElMessageBox.confirm('确定要导入备份吗？这将覆盖当前所有数据且不可恢复！', '高风险操作警告', {
+       type: 'warning',
+       confirmButtonText: '确定覆盖',
+       cancelButtonText: '取消'
+   }).then(async () => {
+       const loadingInstance = ElLoading.service({ text: '正在恢复数据，请勿关闭页面...', background: 'rgba(0,0,0,0.7)' })
+       try {
+           const formData = new FormData()
+           formData.append('file', options.file)
+           await importBackup(formData)
+           loadingInstance.close()
+           ElMessage.success('恢复成功，系统即将刷新')
+           setTimeout(() => {
+               window.location.reload()
+           }, 1500)
+       } catch (error) {
+           loadingInstance.close()
+           console.error(error)
+           ElMessage.error(error.response?.data?.msg || '恢复失败')
+       }
+   }).catch(() => {})
 }
 
 // Knowledge Actions

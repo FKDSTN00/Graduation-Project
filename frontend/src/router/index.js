@@ -149,9 +149,9 @@ router.beforeEach((to, from, next) => {
         next('/login')
         return
     }
-    // 管理员访问非后台页面时跳转到后台，但允许访问知识库页面
-    if (isAdmin && !to.path.startsWith('/admin') && !to.path.startsWith('/knowledge') && !to.path.startsWith('/announcement') && to.path !== '/login' && to.path !== '/register') {
-        next('/admin/kanban')
+    // 管理员访问非后台页面时跳转到后台，但允许访问知识库、公告详情和个人中心
+    if (isAdmin && !to.path.startsWith('/admin') && !to.path.startsWith('/knowledge') && !to.path.startsWith('/announcement') && !to.path.startsWith('/personal-center') && to.path !== '/login' && to.path !== '/register') {
+        next('/admin/announcement')
         return
     }
     next()

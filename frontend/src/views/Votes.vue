@@ -34,6 +34,14 @@
                   {{ vote.is_active ? '进行中' : '已结束' }}
                 </el-tag>
                 <el-button
+                  v-if="vote.user_voted_key || !vote.is_active || userStore.userInfo?.role === 'admin'"
+                  type="primary"
+                  size="small"
+                  @click="showChart(vote)"
+                >
+                  <el-icon><PieChart /></el-icon> 可视化
+                </el-button>
+                <el-button
                   v-if="userStore.userInfo?.role === 'admin'"
                   type="danger"
                   size="small"
@@ -81,6 +89,22 @@
       </div>
     </div>
 
+    <!-- Chart Dialog -->
+    <el-dialog
+      v-model="chartDialogVisible"
+      :title="currentChart?.title + ' - 投票结果'"
+      width="600px"
+      destroy-on-close
+    >
+      <div ref="chartContainer" style="width: 100%; height: 400px;"></div>
+      <template #footer>
+        <el-radio-group v-model="chartType" @change="renderChart">
+          <el-radio-button label="pie">饼状图</el-radio-button>
+          <el-radio-button label="bar">柱状图</el-radio-button>
+        </el-radio-group>
+      </template>
+    </el-dialog>
+
     <!-- Create Vote Dialog -->
     <el-dialog
       v-model="createDialogVisible"
@@ -127,11 +151,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Check, Delete, Minus } from '@element-plus/icons-vue'
+import { Plus, Check, Delete, Minus, PieChart } from '@element-plus/icons-vue'
 import { useUserStore } from '../store'
 import { getVotes, createVote, submitVote, deleteVote } from '../api/notice'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
+import * as echarts from 'echarts'
 
 const userStore = useUserStore()
 const loading = ref(false)
@@ -139,6 +164,13 @@ const votes = ref([])
 const createDialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref(null)
+
+// Chart
+const chartDialogVisible = ref(false)
+const currentChart = ref(null)
+const chartType = ref('pie')
+const chartContainer = ref(null)
+let chartInstance = null
 
 const form = reactive({
   title: '',
@@ -255,6 +287,95 @@ const handleDelete = (id) => {
 
 const formatDate = (date) => {
   return dayjs(date).format('MM-DD HH:mm')
+}
+
+const showChart = (vote) => {
+  currentChart.value = vote
+  chartDialogVisible.value = true
+  setTimeout(() => {
+    renderChart()
+  }, 100)
+}
+
+const renderChart = () => {
+  if (!chartContainer.value) return
+  
+  if (chartInstance) {
+    chartInstance.dispose()
+  }
+  
+  chartInstance = echarts.init(chartContainer.value)
+  
+  const data = currentChart.value.options.map(opt => ({
+    name: opt.label,
+    value: opt.count
+  }))
+  
+  let option = {}
+  
+  if (chartType.value === 'pie') {
+    option = {
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c}票 ({d}%)'
+      },
+      legend: {
+        orient: 'horizontal',
+        bottom: '0%'
+      },
+      series: [
+        {
+          name: '投票结果',
+          type: 'pie',
+          radius: '60%',
+          data: data,
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          },
+          label: {
+            formatter: '{b}: {d}%'
+          }
+        }
+      ]
+    }
+  } else {
+    option = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: data.map(d => d.name)
+      },
+      yAxis: {
+        type: 'value',
+        name: '票数'
+      },
+      series: [
+        {
+          name: '票数',
+          type: 'bar',
+          data: data.map(d => d.value),
+          itemStyle: {
+            color: '#409EFF'
+          },
+          label: {
+            show: true,
+            position: 'top'
+          }
+        }
+      ]
+    }
+  }
+  
+  chartInstance.setOption(option)
 }
 
 onMounted(() => {

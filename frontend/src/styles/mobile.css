@@ -1,0 +1,222 @@
+/* 移动端专用样式 - 针对各个页面的特定优化 */
+
+@media (max-width: 768px) {
+  /* Home 页面优化 */
+  .home-container {
+    padding: 12px !important;
+  }
+  
+  .home-container .sidebar {
+    display: none; /* 移动端隐藏侧边栏，改用抽屉 */
+  }
+  
+  .home-container .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* 顶部导航栏优化 */
+  .top-nav {
+    padding: 8px 12px !important;
+    flex-wrap: wrap;
+  }
+  
+  .top-nav .nav-left,
+  .top-nav .nav-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  /* 卡片网格布局单列显示 */
+  .grid-layout {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  /* 投票卡片优化 */
+  .vote-card .card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+  
+  .vote-card .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  /* 留言反馈卡片优化 */
+  .feedback-container {
+    padding: 12px !important;
+  }
+  
+  .post-item {
+    flex-direction: column !important;
+  }
+  
+  .post-main {
+    margin-right: 0 !important;
+    margin-bottom: 12px;
+  }
+  
+  .post-stats {
+    width: 100%;
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: center !important;
+  }
+  
+  /* 文档列表优化 */
+  .doc-item {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  
+  .doc-actions {
+    width: 100%;
+    margin-top: 8px;
+    justify-content: flex-start !important;
+  }
+  
+  /* 任务看板优化 */
+  .kanban-container {
+    overflow-x: auto;
+  }
+  
+  .kanban-column {
+    min-width: 280px !important;
+  }
+  
+  /* 管理员后台优化 */
+  .admin-dashboard {
+    padding: 12px !important;
+  }
+  
+  .admin-dashboard .el-tabs__nav-scroll {
+    overflow-x: auto;
+  }
+  
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  
+  /* 知识库文章列表 */
+  .article-item {
+    flex-direction: column;
+  }
+  
+  .article-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+  
+  /* 搜索栏优化 */
+  .search-bar {
+    width: 100% !important;
+  }
+  
+  /* 过滤栏优化 */
+  .filter-bar {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .filter-bar > * {
+    width: 100% !important;
+  }
+  
+  /* 用户头像和信息优化 */
+  .user-profile {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  /* 下拉菜单优化 */
+  .el-dropdown-menu {
+    max-width: 90vw;
+  }
+  
+  /* 图表容器优化 */
+  .chart-container,
+  [ref="chartContainer"] {
+    height: 300px !important;
+  }
+  
+  /* 编辑器优化 */
+  .editor-container {
+    padding: 8px !important;
+  }
+  
+  /* 标签组优化 */
+  .el-tag {
+    margin: 2px !important;
+  }
+  
+  /* 分页器优化 */
+  .el-pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .el-pagination button,
+  .el-pagination .el-pager li {
+    min-width: 28px !important;
+    height: 28px !important;
+    line-height: 28px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 超小屏幕特殊优化 */
+  .home-container,
+  .feedback-container,
+  .votes-container,
+  .admin-dashboard {
+    padding: 8px !important;
+  }
+  
+  h1 {
+    font-size: 20px !important;
+  }
+  
+  h2 {
+    font-size: 18px !important;
+  }
+  
+  h3 {
+    font-size: 16px !important;
+  }
+  
+  /* 按钮文字可能换行 */
+  .el-button {
+    white-space: normal !important;
+    min-height: 32px;
+  }
+  
+  /* 表格极简模式 */
+  .el-table th,
+  .el-table td {
+    padding: 8px 4px !important;
+    font-size: 12px !important;
+  }
+  
+  /* 卡片内边距进一步压缩 */
+  .el-card {
+    margin: 8px 0 !important;
+  }
+}
+
+/* 横屏优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .el-dialog {
+    max-height: 90vh !important;
+    overflow-y: auto;
+  }
+  
+  .el-drawer {
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+}

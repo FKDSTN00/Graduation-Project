@@ -23,3 +23,25 @@ export const fetchAdminTasks = () => {
 export const monitorDocuments = (keywords) => {
   return request.post('/admin/monitor/docs', { keywords })
 }
+
+export const exportBackup = () => {
+  return request.get('/admin/backup/export', { responseType: 'blob' })
+}
+
+export const importBackup = (formData) => {
+  return request.post('/admin/backup/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export const getMonitorKeywords = () => {
+  return request.get('/admin/monitor/keywords')
+}
+
+export const addMonitorKeyword = (keyword) => {
+  return request.post('/admin/monitor/keywords', { keyword })
+}
+
+export const deleteMonitorKeyword = (id) => {
+  return request.delete(`/admin/monitor/keywords/${id}`)
+}

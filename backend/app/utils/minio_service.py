@@ -59,8 +59,23 @@ def upload_file_to_minio(file, object_name, bucket_name='avatars'):
         )
         
         # 返回文件URL
-        # 注意：使用 localhost 而不是内部 endpoint，因为浏览器需要访问
-        # 如果是生产环境，应该使用实际的域名
+        # 使用相对路径，由 nginx 代理到 MinIO
+        # 这样移动端和 PC 端都能正确访问
+        from flask import request
+        
+        # 优先使用环境变量配置的公网地址
+        public_url = current_app.config.get('MINIO_PUBLIC_URL')
+        if public_url:
+            return f"{public_url}/{bucket_name}/{object_name}"
+        
+        # 否则使用请求的 host（通过 nginx 代理）
+        if request:
+            # 使用 /minio 路径，由 nginx 反向代理到 minio:9000
+            host = request.host
+            scheme = 'https' if request.is_secure else 'http'
+            return f"{scheme}://{host}/minio/{bucket_name}/{object_name}"
+        
+        # 后备方案：使用 localhost（仅用于开发环境）
         return f"http://localhost:9000/{bucket_name}/{object_name}"
         
     except S3Error as e:
@@ -96,14 +111,28 @@ def extract_object_path_from_url(url):
         return None, None
     
     try:
-        # 解析 URL: http://localhost:9000/bucket/path/to/file.jpg
-        # 提取 bucket 和 object_name
+        # 解析 URL
         parts = url.split('/')
-        if len(parts) >= 5:  # http: // localhost:9000 / bucket / file
-            bucket_name = parts[3]
-            object_name = '/'.join(parts[4:])
-            return bucket_name, object_name
-    except Exception:
+        
+        # 检查是否是新格式（包含 /minio/ 路径）
+        if '/minio/' in url:
+            # 新格式: http://host/minio/bucket/path/to/file.jpg
+            try:
+                minio_index = parts.index('minio')
+                if len(parts) > minio_index + 2:
+                    bucket_name = parts[minio_index + 1]
+                    object_name = '/'.join(parts[minio_index + 2:])
+                    return bucket_name, object_name
+            except ValueError:
+                pass
+        else:
+            # 旧格式: http://localhost:9000/bucket/path/to/file.jpg
+            if len(parts) >= 5:
+                bucket_name = parts[3]
+                object_name = '/'.join(parts[4:])
+                return bucket_name, object_name
+    except Exception as e:
+        print(f"解析 MinIO URL 失败: {url}, 错误: {e}")
         pass
     
     return None, None

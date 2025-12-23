@@ -1,4 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
+import subprocess
+import os
+import tempfile
+import io
+from datetime import datetime
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ..models.models import User, Document, Folder
@@ -199,3 +204,111 @@ def monitor_documents():
     flagged_docs.sort(key=lambda x: x['updated_at'], reverse=True)
     
     return jsonify(flagged_docs), 200
+
+
+@admin_bp.route('/backup/export', methods=['GET'])
+@admin_required
+def export_backup():
+    """导出系统数据库备份"""
+    db_host = 'mysql'
+    db_user = 'user'
+    db_password = 'user'
+    db_name = 'db'
+    
+    try:
+        # 使用 mysqldump 导出
+        # 注意: 需要容器内安装 mysql-client
+        cmd = ["mysqldump", "-h", db_host, "-u", db_user, f"-p{db_password}", "--skip-ssl", "--databases", db_name]
+        output = subprocess.check_output(cmd)
+        
+        return send_file(
+            io.BytesIO(output),
+            as_attachment=True,
+            download_name=f'backup_{db_name}_{datetime.now().strftime("%Y%m%d%H%M")}.sql',
+            mimetype='application/sql'
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Backup failed: {e}")
+        return jsonify({'msg': '数据库导出失败'}), 500
+    except Exception as e:
+        print(f"Export error: {e}")
+        return jsonify({'msg': f'备份失败: {str(e)}'}), 500
+
+
+@admin_bp.route('/backup/import', methods=['POST'])
+@admin_required
+def import_backup():
+    """导入系统数据库备份"""
+    if 'file' not in request.files:
+        return jsonify({'msg': '未上传文件'}), 400
+    file = request.files['file']
+    if not file:
+        return jsonify({'msg': '文件为空'}), 400
+        
+    # 保存到临时文件
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    temp_path = temp.name
+    try:
+        file.save(temp_path)
+        temp.close()
+        
+        db_host = 'mysql'
+        db_user = 'user'
+        db_password = 'user'
+        db_name = 'db'
+        
+        # 使用 mysql 命令恢复
+        cmd = f"mysql -h {db_host} -u {db_user} -p{db_password} --skip-ssl {db_name} < {temp_path}"
+        
+        subprocess.check_call(cmd, shell=True)
+        
+        return jsonify({'msg': '恢复成功，数据已重置'}), 200
+    except Exception as e:
+        return jsonify({'msg': f'恢复失败: {str(e)}'}), 500
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+@admin_bp.route('/monitor/keywords', methods=['GET'])
+@admin_required
+def get_monitor_keywords():
+    """获取所有监控关键词"""
+    from ..models.models import MonitorKeyword
+    keywords = MonitorKeyword.query.order_by(MonitorKeyword.created_at.desc()).all()
+    return jsonify([{'id': k.id, 'keyword': k.keyword, 'created_at': k.created_at.isoformat()} for k in keywords]), 200
+
+
+@admin_bp.route('/monitor/keywords', methods=['POST'])
+@admin_required
+def add_monitor_keyword():
+    """添加监控关键词"""
+    from ..models.models import MonitorKeyword
+    data = request.get_json()
+    keyword = data.get('keyword', '').strip()
+    
+    if not keyword:
+        return jsonify({'msg': '关键词不能为空'}), 400
+    
+    # 检查是否已存在
+    existing = MonitorKeyword.query.filter_by(keyword=keyword).first()
+    if existing:
+        return jsonify({'msg': '关键词已存在'}), 400
+    
+    new_keyword = MonitorKeyword(keyword=keyword)
+    db.session.add(new_keyword)
+    db.session.commit()
+    
+    return jsonify({'msg': '添加成功', 'id': new_keyword.id, 'keyword': new_keyword.keyword}), 201
+
+
+@admin_bp.route('/monitor/keywords/<int:id>', methods=['DELETE'])
+@admin_required
+def delete_monitor_keyword(id):
+    """删除监控关键词"""
+    from ..models.models import MonitorKeyword
+    keyword = MonitorKeyword.query.get_or_404(id)
+    db.session.delete(keyword)
+    db.session.commit()
+    return jsonify({'msg': '删除成功'}), 200
+

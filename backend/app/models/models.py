@@ -197,6 +197,13 @@ class FeedbackReplyLike(db.Model):
     reply_id = db.Column(db.Integer, db.ForeignKey('feedback_reply.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class MonitorKeyword(db.Model):
+    """管理员监控关键词"""
+    __tablename__ = 'monitor_keyword'
+    id = db.Column(db.Integer, primary_key=True)
+    keyword = db.Column(db.String(100), nullable=False, unique=True, comment='监控关键词')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
+
 class KanbanList(db.Model):
     """看板列"""
     id = db.Column(db.Integer, primary_key=True)
