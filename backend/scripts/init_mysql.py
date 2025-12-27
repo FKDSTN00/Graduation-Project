@@ -13,8 +13,8 @@ sys.path.append(os.getcwd())
 from app import create_app
 from app.extensions import db
 from app.models.models import (
-    User, Document, Tag, RecycleBin, Schedule, Meeting,
-    ApprovalFlow, Notice, Vote, KanbanList, KanbanCard, AIQueryLog, Task, FileCenterFolder, FileCenterFile, SystemNotification
+    User, Document, RecycleBin, Schedule, Meeting,
+    ApprovalFlow, Notice, Vote, KanbanList, KanbanCard, AISession, AIMessage, Task, FileCenterFolder, FileCenterFile, SystemNotification
 )
 
 def create_tables():

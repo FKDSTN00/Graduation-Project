@@ -567,14 +567,19 @@ def delete_document(id):
         
     if hard_delete or doc.is_deleted: # 已在回收站的文档直接执行物理删除
         try:
-            # 删除文档附件（如果有）
+            from ..utils.minio_service import delete_file_by_url, delete_images_from_content
+            
+            # 1. 删除 attachments 列表中的附件
             if doc.attachments:
-                from ..utils.minio_service import delete_file_by_url
                 for attachment_url in doc.attachments:
                     try:
                         delete_file_by_url(attachment_url)
                     except Exception as e:
                         print(f"删除附件失败 {attachment_url}: {e}")
+            
+            # 2. 如果不是隐私空间文档（内容未加密），解析内容并删除嵌入的图片
+            if not doc.in_privacy_space:
+                delete_images_from_content(doc.content)
             
             db.session.delete(doc)
             db.session.commit()
@@ -606,14 +611,19 @@ def clear_recycle_bin():
         doc_ids = [doc.id for doc in recycled_docs]
         
         # 收集所有附件 URL
-        from ..utils.minio_service import delete_file_by_url
+        from ..utils.minio_service import delete_file_by_url, delete_images_from_content
         for doc in recycled_docs:
+            # 1. 删除附件列表
             if doc.attachments:
                 for attachment_url in doc.attachments:
                     try:
                         delete_file_by_url(attachment_url)
                     except Exception as e:
                         print(f"删除附件失败 {attachment_url}: {e}")
+            
+            # 2. 从内容中删除图片
+            if not doc.in_privacy_space: # 回收站通常不包含隐私文档，但防御性检查
+                delete_images_from_content(doc.content)
         
         Document.query.filter_by(owner_id=current_user_id, is_deleted=True).delete(synchronize_session=False)
         db.session.commit()

@@ -27,6 +27,11 @@ BUCKETS = [
         "policy": "public"
     },
     {
+        "name": "documents",
+        "description": "文档内嵌图片/附件",
+        "policy": "public"
+    },
+    {
         "name": "file-center",
         "description": "文件中心存储",
         "policy": "private"

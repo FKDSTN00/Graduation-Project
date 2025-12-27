@@ -108,6 +108,12 @@ const router = createRouter({
                     meta: { title: '投票与问卷' }
                 },
                 {
+                    path: 'ai-chat',
+                    name: 'ai-chat',
+                    component: () => import('../views/AIChat.vue'),
+                    meta: { title: 'Deepseek-R1' }
+                },
+                {
                     path: 'feedback',
                     name: 'feedback',
                     component: Feedback,

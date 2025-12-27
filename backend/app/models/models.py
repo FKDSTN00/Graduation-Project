@@ -64,11 +64,7 @@ class Document(db.Model):
     owner = db.relationship('User', backref='documents')
     folder = db.relationship('Folder', backref='documents')
 
-class Tag(db.Model):
-    """文档标签"""
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False, comment='标签名称')
-    document_id = db.Column(db.Integer, db.ForeignKey('document.id'), nullable=False, comment='关联文档ID')
+
 
 class RecycleBin(db.Model):
     """回收站"""
@@ -219,13 +215,25 @@ class KanbanCard(db.Model):
     assignee_id = db.Column(db.Integer, db.ForeignKey('user.id'), comment='负责人ID')
     order = db.Column(db.Integer, default=0, comment='排序')
 
-class AIQueryLog(db.Model):
-    """AI 问答日志"""
+class AISession(db.Model):
+    """AI 会话"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='用户ID')
-    query = db.Column(db.Text, nullable=False, comment='提问内容')
-    response = db.Column(db.Text, comment='AI回复')
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, comment='时间')
+    title = db.Column(db.String(255), comment='会话标题')
+    is_pinned = db.Column(db.Boolean, default=False, comment='是否置顶')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment='更新时间')
+
+    user = db.relationship('User', backref=db.backref('ai_sessions', lazy='dynamic', cascade='all, delete-orphan'))
+    messages = db.relationship('AIMessage', backref='session', lazy='dynamic', cascade='all, delete-orphan')
+
+class AIMessage(db.Model):
+    """AI 消息"""
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('ai_session.id'), nullable=False, comment='会话ID')
+    role = db.Column(db.String(20), nullable=False, comment='角色: user/assistant')
+    content = db.Column(db.Text, nullable=False, comment='内容')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='时间')
 
 class Task(db.Model):
     """任务模型"""

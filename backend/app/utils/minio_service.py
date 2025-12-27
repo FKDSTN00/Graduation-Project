@@ -125,6 +125,8 @@ def extract_object_path_from_url(url):
     
     return None, None
 
+    return None, None
+
 def delete_file_by_url(url):
     """
     通过 URL 删除 MinIO 文件
@@ -135,3 +137,31 @@ def delete_file_by_url(url):
     bucket_name, object_name = extract_object_path_from_url(url)
     if bucket_name and object_name:
         delete_file_from_minio(object_name, bucket_name)
+
+def delete_images_from_content(content):
+    """
+    从文档内容(HTML/Markdown)中提取并删除 MinIO 图片
+    """
+    if not content:
+        return
+
+    import re
+    # 提取 URL 的正则
+    # 1. HTML img src
+    html_pattern = r'<img[^>]+src="([^">]+)"'
+    # 2. Markdown ![...](url)
+    md_pattern = r'!\[.*?\]\((.*?)\)'
+    
+    urls = set()
+    urls.update(re.findall(html_pattern, content))
+    urls.update(re.findall(md_pattern, content))
+    
+    for url in urls:
+        # 只处理属于本系统 MinIO documents 桶的图片
+        # 路径通常包含 /minio/documents/ 或 /documents/
+        if '/documents/' in url:
+            try:
+                delete_file_by_url(url)
+            except Exception as e:
+                print(f"从内容删除图片失败 {url}: {e}")
+

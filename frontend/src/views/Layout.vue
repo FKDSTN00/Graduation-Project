@@ -51,6 +51,10 @@
             <el-icon><Ticket /></el-icon>
             <span>投票与问卷</span>
           </el-menu-item>
+          <el-menu-item index="/ai-chat">
+            <el-icon><Cpu /></el-icon>
+            <span>DeepSeek-R1</span>
+          </el-menu-item>
           <el-menu-item index="/feedback">
             <el-icon><ChatDotRound /></el-icon>
             <span>留言与反馈</span>
@@ -215,10 +219,9 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../store'
 import { 
-  Document, Calendar, Stamp, Bell, DataBoard, Cpu, 
-  Moon, Sunny, UserFilled, ArrowDown, Setting, Menu,
-  Monitor, Collection, Files, User, ChatDotRound, RefreshLeft,
-  House, List, Ticket
+  House, Document, List, Collection, Files, Calendar, 
+  Menu, User, Expand, Fold, Bell, Moon, Sunny,
+  Stamp, Ticket, ChatDotRound, DataBoard, Monitor, RefreshLeft, Cpu 
 } from '@element-plus/icons-vue'
 
 import { ElMessage, ClickOutside as vClickOutside } from 'element-plus'

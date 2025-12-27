@@ -187,10 +187,12 @@
 
   <!-- 各类弹窗 -->
     <el-dialog v-model="previewVisible" :title="currentDoc?.title" width="70%" top="5vh">
-      <div class="preview-content w-e-text-container" style="border: none;" v-html="currentDoc?.content"></div>
+      <div class="preview-content" v-html="currentDoc?.content"></div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleShare(currentDoc)">分享</el-button>
+          <el-button @click="handleAISummary(currentDoc)">
+            <el-icon><MagicStick /></el-icon> AI总结
+          </el-button>
           <el-button type="primary" @click="handleEdit(currentDoc)">编辑</el-button>
           <el-button type="danger" @click="handleDelete(currentDoc)">删除</el-button>
         </div>
@@ -342,7 +344,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Document, Folder, Delete, Plus, Search, ArrowDown, 
-  Top, More, MoreFilled, Lock, Upload 
+  Top, More, MoreFilled, Lock, Upload, MagicStick 
 } from '@element-plus/icons-vue'
 import request from '../api/request'
 import dayjs from 'dayjs'
@@ -773,9 +775,22 @@ const onImportChange = async (event) => {
   }
 }
 
-const handlePreview = (doc) => {
+const handlePreview = async (doc) => {
+  // 先显示部分内容的预览，避免卡顿
   currentDoc.value = doc
   previewVisible.value = true
+  
+  try {
+    const params = {}
+    if (doc.in_privacy_space && privacyStore.password) {
+      params._privacy_password = privacyStore.password
+    }
+    const fullDoc = await request.get(`/docs/${doc.id}`, { params })
+    currentDoc.value = fullDoc
+  } catch (err) {
+    console.error('获取完整文档失败', err)
+    // 失败时不报错，就显示列表里的部分内容
+  }
 }
 
 const handleEdit = (doc) => {
@@ -792,6 +807,32 @@ const handleEdit = (doc) => {
   }
   router.push({ path: `/documents/edit/${doc.id}`, query })
 }
+
+const handleAISummary = (doc) => {
+  if (!doc.content) {
+    ElMessage.warning('文档内容为空，无法总结')
+    return
+  }
+  
+  // 关闭预览弹窗
+  previewVisible.value = false
+  
+  // 将文档信息存入 sessionStorage，跳转到 AI 聊天页处理
+  // 这样可以避免在当前页等待 AI 响应超时的问题，也能让用户直接看到 AI 生成过程
+  try {
+    sessionStorage.setItem('ai_summary_doc', JSON.stringify({
+      title: doc.title,
+      content: doc.content
+    }))
+    
+    ElMessage.success('正在跳转到 AI 助手...')
+    router.push({ path: '/ai-chat', query: { action: 'summary' } })
+    
+  } catch (e) {
+    ElMessage.error('无法跳转：' + e.message)
+  }
+}
+
 
 const toggleSelect = (doc) => {
   const next = new Set(selectedDocs.value)
