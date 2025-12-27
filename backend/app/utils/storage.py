@@ -91,6 +91,8 @@ class StorageClient:
                 content_type = 'application/json; charset=utf-8'
             elif ext == '.xml':
                 content_type = 'application/xml; charset=utf-8'
+            elif ext == '.pdf':
+                content_type = 'application/pdf'
             
             response_headers = {
                 'response-content-disposition': f'inline; filename="{encoded_filename}"; filename*=UTF-8\'\'{encoded_filename}'
@@ -100,13 +102,31 @@ class StorageClient:
             if content_type:
                 response_headers['response-content-type'] = content_type
 
-        return self.external_client.get_presigned_url(
+        # 获取预签名 URL (绝对路径，通常是 http://minio:9000/...)
+        url = self.client.get_presigned_url(
             "GET",
             self.bucket,
             object_name,
             expires=timedelta(hours=2),
             response_headers=response_headers
         )
+        
+        # 将绝对路径转换为相对路径 /minio/...
+        # 假设 MinIO 生成的 URL 格式为: http://endpoint/bucket/object?query...
+        # 我们需要保留 /bucket/object?query... 部分，并加上 /minio 前缀
+        
+        try:
+            from urllib.parse import urlparse, urlunparse
+            parsed = urlparse(url)
+            # 路径部分加上 /minio 前缀 (注意 path 已经包含 /bucket/object)
+            new_path = f"/minio{parsed.path}"
+            # 重组 URL，去除 scheme 和 netloc，使其成为相对路径
+            # 或者是构建浏览器可访问的绝对路径（如果需要）
+            # 这里我们返回相对路径，让浏览器自动使用当前页面的 host
+            return urlunparse(('', '', new_path, '', parsed.query, ''))
+        except Exception as e:
+            current_app.logger.error(f"Failed to convert presigned URL to relative path: {e}")
+            return url
 
     def get_download_url(self, object_name, original_filename=None):
         """获取强制下载链接（使用 attachment）"""
@@ -121,13 +141,24 @@ class StorageClient:
                 'response-content-disposition': f'attachment; filename="{encoded_filename}"; filename*=UTF-8\'\'{encoded_filename}'
             }
 
-        return self.external_client.get_presigned_url(
+        # 获取预签名 URL (绝对路径)
+        url = self.client.get_presigned_url(
             "GET",
             self.bucket,
             object_name,
             expires=timedelta(hours=2),
             response_headers=response_headers
         )
+
+        # 转换为相对路径 /minio/...
+        try:
+            from urllib.parse import urlparse, urlunparse
+            parsed = urlparse(url)
+            new_path = f"/minio{parsed.path}"
+            return urlunparse(('', '', new_path, '', parsed.query, ''))
+        except Exception as e:
+            current_app.logger.error(f"Failed to convert download URL to relative path: {e}")
+            return url
 
     def delete_file(self, object_name):
         """删除文件"""

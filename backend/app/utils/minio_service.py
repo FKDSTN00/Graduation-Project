@@ -59,24 +59,12 @@ def upload_file_to_minio(file, object_name, bucket_name='avatars'):
         )
         
         # 返回文件URL
-        # 使用相对路径，由 nginx 代理到 MinIO
-        # 这样移动端和 PC 端都能正确访问
-        from flask import request
+        # 统一返回相对路径，由前端拼接或浏览器自动处理
+        # 格式: /minio/{bucket_name}/{object_name}
+        # 这样无论是在 PC (localhost) 还是移动端 (IP)，只要访问的前端地址是对的，
+        # 这个相对路径就能正确通过 nginx 代理到 MinIO
         
-        # 优先使用环境变量配置的公网地址
-        public_url = current_app.config.get('MINIO_PUBLIC_URL')
-        if public_url:
-            return f"{public_url}/{bucket_name}/{object_name}"
-        
-        # 否则使用请求的 host（通过 nginx 代理）
-        if request:
-            # 使用 /minio 路径，由 nginx 反向代理到 minio:9000
-            host = request.host
-            scheme = 'https' if request.is_secure else 'http'
-            return f"{scheme}://{host}/minio/{bucket_name}/{object_name}"
-        
-        # 后备方案：使用 localhost（仅用于开发环境）
-        return f"http://localhost:9000/{bucket_name}/{object_name}"
+        return f"/minio/{bucket_name}/{object_name}"
         
     except S3Error as e:
         raise Exception(f"MinIO 上传失败: {str(e)}")

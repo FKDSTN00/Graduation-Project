@@ -173,7 +173,7 @@
           />
           <el-dropdown>
             <span class="el-dropdown-link user-chip">
-              <el-avatar :size="32" :src="userStore.userInfo?.avatar" icon="UserFilled" />
+              <el-avatar :size="32" :src="avatarSrc" icon="UserFilled" />
               <span class="username" :class="{ 'hidden-mobile': isMobile }">{{ displayName }}</span>
               <el-icon class="el-icon--right"><arrow-down /></el-icon>
             </span>
@@ -297,6 +297,20 @@ const formatTime = (iso) => {
     // 后端存储的是UTC时间，需要转换为本地时间
     return dayjs.utc(iso).local().format('MM-DD HH:mm')
 }
+
+const avatarSrc = computed(() => {
+  if (!userStore.userInfo?.avatar) return ''
+  // 增加时间戳参数，强制刷新缓存
+  // 使用 session storage 存储一个固定的时间戳，只有在刷新页面或重新登录时才会更新
+  let ts = sessionStorage.getItem('avatar_ts')
+  if (!ts) {
+    ts = new Date().getTime().toString()
+    sessionStorage.setItem('avatar_ts', ts)
+  }
+  
+  const url = userStore.userInfo.avatar
+  return url.includes('?') ? `${url}&t=${ts}` : `${url}?t=${ts}`
+})
 
 const displayName = computed(() => {
   if (isLoggingOut.value) return '正在退出...'

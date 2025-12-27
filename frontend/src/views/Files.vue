@@ -128,11 +128,18 @@
     >
       <div v-loading="previewLoading" class="preview-container">
         <div v-if="currentPreviewFile.type === 'docx'" ref="docxPreviewRef" class="docx-preview"></div>
-        <div v-else-if="currentPreviewFile.type === 'txt' || currentPreviewFile.type === 'html'" class="text-preview">
+        <div v-else-if="['txt', 'html'].includes(currentPreviewFile.type)" class="text-preview">
           <iframe :src="currentPreviewFile.url" frameborder="0" style="width: 100%; height: 600px;"></iframe>
         </div>
+        <div v-else-if="['md', 'markdown'].includes(currentPreviewFile.type)" class="markdown-preview">
+             <div class="markdown-body" v-html="currentPreviewFile.details"></div>
+        </div>
         <div v-else-if="currentPreviewFile.type === 'pdf'" class="pdf-preview">
-          <iframe :src="currentPreviewFile.url" frameborder="0" style="width: 100%; height: 600px;"></iframe>
+          <!-- 使用 vue-pdf-embed 替代 iframe -->
+          <vue-pdf-embed :source="currentPreviewFile.url" />
+        </div>
+        <div v-else-if="['jpg', 'jpeg', 'png', 'gif'].includes(currentPreviewFile.type)" class="image-preview" style="text-align: center;">
+          <img :src="currentPreviewFile.url" style="max-width: 100%; max-height: 80vh;" />
         </div>
         <div v-else class="unsupported-preview">
           <el-empty description="此文件类型暂不支持在线预览">
@@ -149,6 +156,23 @@ import { ref, computed, onMounted } from 'vue'
 import { Folder, Document, FolderAdd, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
+import { renderAsync } from 'docx-preview'
+import VuePdfEmbed from 'vue-pdf-embed'
+// import 'vue-pdf-embed/dist/style/index.css'
+
+// 手动设置 pdfjs worker
+import * as pdfjsLib from 'pdfjs-dist'
+// 这里是一个 trick，利用 URL 构造 worker script，因为直接 import worker 可能有路径问题
+// 或者直接使用 cdn (用户不允许)，或者使用 vite 显式 worker import
+// 为了兼容离线，我们需要确保 worker 是本地资源。
+// 在 Vite 中，可以 import workerUrl from 'pdfjs-dist/build/pdf.worker?url'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.js?url'
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
+
+import { marked } from 'marked'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css' // 或者其他主题
+
 import { getFiles, createFolder, uploadFile, updateFolder, updateFile, deleteFolder, deleteFile, previewFile, downloadFile } from '../api/files'
 
 const props = defineProps({
@@ -316,8 +340,8 @@ const previewFileItem = async (file) => {
         await new Promise(resolve => setTimeout(resolve, 100))
         
         // 使用 docx-preview 渲染
-        if (docxPreviewRef.value && window.docx) {
-          await window.docx.renderAsync(arrayBuffer, docxPreviewRef.value, null, {
+        if (docxPreviewRef.value) {
+          await renderAsync(arrayBuffer, docxPreviewRef.value, null, {
             className: 'docx-wrapper',
             inWrapper: true,
             ignoreWidth: false,
@@ -333,8 +357,6 @@ const previewFileItem = async (file) => {
             renderFootnotes: true,
             renderEndnotes: true
           })
-        } else {
-          throw new Error('docx-preview 库未加载')
         }
       } catch (error) {
         console.error('渲染 docx 失败:', error)
@@ -343,6 +365,28 @@ const previewFileItem = async (file) => {
       } finally {
         previewLoading.value = false
       }
+    } else if (file.type === 'md' || file.type === 'markdown') {
+        // Markdown 预览
+        currentPreviewFile.value.details = '加载中...'
+        previewVisible.value = true
+        previewLoading.value = true
+        try {
+            const response = await fetch(res.url)
+            const text = await response.text()
+            // 配置 marked 高亮
+            marked.setOptions({
+              highlight: function(code, lang) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+              },
+              langPrefix: 'hljs language-'
+            })
+            currentPreviewFile.value.details = marked.parse(text)
+        } catch(e) {
+            ElMessage.error('Markdown 加载失败')
+        } finally {
+            previewLoading.value = false
+        }
     } else if (['xlsx', 'pptx', 'doc', 'xls', 'ppt'].includes(file.type)) {
        // 其他 Office 文件暂不支持在线渲染，直接打开
        window.open(res.url, '_blank')
@@ -435,7 +479,7 @@ const formatTime = (time) => {
 
 // 初始化
 onMounted(() => {
-  loadData(null)
+  loadData()
 })
 </script>
 

@@ -36,6 +36,8 @@ import { ElMessage } from 'element-plus'
 import request from '../api/request'
 import { usePrivacyStore } from '../store'
 import { Document } from '@element-plus/icons-vue'
+import { createEditor, createToolbar } from '@wangeditor/editor'
+import '@wangeditor/editor/dist/css/style.css'
 
 const router = useRouter()
 const route = useRoute()
@@ -59,8 +61,7 @@ const isPrivacyDoc = ref(false)
 // 如果有 ID 参数，则是编辑模式
 onMounted(async () => {
   // Initialize wangEditor
-  if (window.wangEditor) {
-    const { createEditor, createToolbar } = window.wangEditor
+  // Initialize wangEditor
     
     const editorConfig = {
       placeholder: '请输入文档内容...',
@@ -143,7 +144,6 @@ onMounted(async () => {
     })
     
     editorInstance = editor // Assign the editor instance
-  }
 
   await fetchFolders()
   

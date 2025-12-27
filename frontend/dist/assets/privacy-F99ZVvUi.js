@@ -1,0 +1,1 @@
+import{O as r}from"./index-6DHakvZj.js";const c=()=>r.get("/privacy/check-password"),t=(s,a=null)=>r.post("/privacy/set-password",{password:s,old_password:a}),e=s=>r.post("/privacy/verify-password",{password:s});export{c,t as s,e as v};

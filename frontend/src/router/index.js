@@ -1,20 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
+// 同步导入关键页面，确保首屏快速加载
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Layout from '../views/Layout.vue'
-import Home from '../views/Home.vue'
-import DocumentList from '../views/DocumentList.vue'
-import DocumentEditor from '../views/DocumentEditor.vue'
-import Schedule from '../views/Schedule.vue'
-import Approval from '../views/Approval.vue'
-import Tasks from '../views/Tasks.vue'
-import Votes from '../views/Votes.vue'
-import Knowledge from '../views/Knowledge.vue'
-import KnowledgeArticle from '../views/KnowledgeArticle.vue'
-// import Files from '../views/Files.vue'
-import Feedback from '../views/Feedback.vue'
-import PersonalCenter from '../views/PersonalCenter.vue'
-import AdminDashboard from '../views/AdminDashboard.vue'
+
+// 懒加载其他页面，按需加载，减少首次加载体积
+const Home = () => import('../views/Home.vue')
+const DocumentList = () => import('../views/DocumentList.vue')
+const DocumentEditor = () => import('../views/DocumentEditor.vue')
+const Schedule = () => import('../views/Schedule.vue')
+const Approval = () => import('../views/Approval.vue')
+const Tasks = () => import('../views/Tasks.vue')
+const Votes = () => import('../views/Votes.vue')
+const Knowledge = () => import('../views/Knowledge.vue')
+const KnowledgeArticle = () => import('../views/KnowledgeArticle.vue')
+const Feedback = () => import('../views/Feedback.vue')
+const PersonalCenter = () => import('../views/PersonalCenter.vue')
+const AdminDashboard = () => import('../views/AdminDashboard.vue')
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
