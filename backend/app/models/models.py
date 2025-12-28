@@ -66,11 +66,7 @@ class Document(db.Model):
 
 
 
-class RecycleBin(db.Model):
-    """回收站"""
-    id = db.Column(db.Integer, primary_key=True)
-    document_id = db.Column(db.Integer, db.ForeignKey('document.id'), nullable=False, comment='文档ID')
-    deleted_at = db.Column(db.DateTime, default=datetime.utcnow, comment='删除时间')
+
 
 class Schedule(db.Model):
     """个人日程"""
@@ -200,20 +196,7 @@ class MonitorKeyword(db.Model):
     keyword = db.Column(db.String(100), nullable=False, unique=True, comment='监控关键词')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
 
-class KanbanList(db.Model):
-    """看板列"""
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False, comment='列标题')
-    order = db.Column(db.Integer, default=0, comment='排序')
 
-class KanbanCard(db.Model):
-    """看板卡片"""
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False, comment='卡片标题')
-    content = db.Column(db.Text, comment='卡片内容')
-    list_id = db.Column(db.Integer, db.ForeignKey('kanban_list.id'), nullable=False, comment='所属列ID')
-    assignee_id = db.Column(db.Integer, db.ForeignKey('user.id'), comment='负责人ID')
-    order = db.Column(db.Integer, default=0, comment='排序')
 
 class AISession(db.Model):
     """AI 会话"""

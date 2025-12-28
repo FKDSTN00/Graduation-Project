@@ -51,7 +51,7 @@ def create_app(config_class=Config):
     from .schedule import schedule_bp
     from .approval import approval_bp
     from .notice import notice_bp
-    from .kanban import kanban_bp
+
     from .ai import ai_bp
     from .users import users_bp
     from .privacy import privacy_bp
@@ -69,7 +69,7 @@ def create_app(config_class=Config):
     app.register_blueprint(schedule_bp, url_prefix='/api/schedule') # 日程会议
     app.register_blueprint(approval_bp, url_prefix='/api/approval') # 审批流程
     app.register_blueprint(notice_bp, url_prefix='/api/notice')     # 公告投票
-    app.register_blueprint(kanban_bp, url_prefix='/api/kanban')     # 工作看板
+
     app.register_blueprint(ai_bp, url_prefix='/api/ai')             # AI 助手
     app.register_blueprint(privacy_bp, url_prefix='/api/privacy')   # 隐私空间
     
