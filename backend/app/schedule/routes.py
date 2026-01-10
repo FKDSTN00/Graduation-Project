@@ -1,6 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models.models import Schedule, Meeting, User, SystemNotification
+from ..models.models import Schedule, Meeting, User, SystemNotification, Role
 from ..extensions import db
 from datetime import datetime
 import calendar
@@ -17,43 +17,37 @@ def get_all_events():
     """获取所有日程和会议（可按时间范围筛选）"""
     current_user_id = int(get_jwt_identity())
     current_user = User.query.get(current_user_id)
-    is_admin = (current_user.role == 'admin')
+    # is_admin = (current_user.role == 'admin') # Not strictly needed for query logic now
     
+    current_app.logger.info(f"Schedule Query - User ID: {current_user_id}, Name: {current_user.username}")
+
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     
     # 构建查询
     from sqlalchemy import or_
     
-    if is_admin:
-        # 管理员：只能看到管理员自己创建的
-        schedule_query = Schedule.query.filter_by(user_id=current_user_id)
-    else:
-        # 普通用户：能获取自己创建的日程 AND 管理员创建的日程
-        # 需要联表查询 User 表来找到管理员创建的日程
-        schedule_query = Schedule.query.join(User).filter(
-            or_(
-                Schedule.user_id == current_user_id,
-                User.role == 'admin'
-            )
-        )
     
-    # 会议方面，通常参与者都可见，或者管理员可见所有？
-    # 用户需求只提到了“日程”，对于“会议”暂保持原有逻辑（或者也仅看跟自己相关的）
-    # 为保持一致性并避免数据泄露，会议也仅展示跟自己相关的（作为组织者或参与者）
-    # 但会议模型中 attendees 是 JSON，筛选较复杂。
-    # 暂时保持会议逻辑不变（管理员看所有，普通用户看自己？），但用户特别强调了“日程”。
-    # 鉴于“日程”是私有的，在这里我们先严格限制 schedule。
+    # Logic:
+    # 1. Admin/Public events (created by admin) are visible to everyone
+    # 2. Private events (created by user/manager) are visible ONLY to creator
     
-    meeting_query = Meeting.query
-    if not is_admin:
-        # 普通用户：能看到自己组织的会议 OR 管理员组织的会议
-        meeting_query = meeting_query.join(User, Meeting.organizer_id == User.id).filter(
-            or_(
-                Meeting.organizer_id == current_user_id,
-                User.role == 'admin'
-            )
+    # Schedule Filter
+    # Must join Role to filter by creator's role code
+    schedule_query = Schedule.query.join(User).outerjoin(Role).filter(
+        or_(
+            Schedule.user_id == current_user_id,
+            Role.code == 'admin'
         )
+    )
+    
+    # Meeting Filter
+    meeting_query = Meeting.query.join(User, Meeting.organizer_id == User.id).outerjoin(Role).filter(
+        or_(
+            Meeting.organizer_id == current_user_id,
+            Role.code == 'admin'
+        )
+    )
 
     if start_date_str and end_date_str:
         try:
@@ -137,9 +131,19 @@ def update_schedule(id):
     current_user_id = int(get_jwt_identity())
     schedule = Schedule.query.get_or_404(id)
     
-    # 仅创建者可修改
-    if schedule.user_id != current_user_id:
-         return jsonify({'error': '无权限'}), 403
+    # 权限检查
+    current_user_id = int(current_user_id)
+    current_user = User.query.get(current_user_id)
+    creator = schedule.user
+    
+    if creator.role == 'admin':
+        # 管理员创建的公共日程：仅管理员可修改
+        if current_user.role != 'admin':
+            return jsonify({'error': '只有管理员可以修改公共日程'}), 403
+    else:
+        # 用户创建的私有日程：仅本人可修改
+        if schedule.user_id != current_user_id:
+             return jsonify({'error': '无权限'}), 403
 
     data = request.get_json()
     
@@ -168,9 +172,17 @@ def delete_schedule(id):
     current_user_id = int(get_jwt_identity())
     schedule = Schedule.query.get_or_404(id)
     
-    # 仅创建者可删除
-    if schedule.user_id != current_user_id:
-         return jsonify({'error': '无权限'}), 403
+    # 权限检查
+    current_user_id = int(current_user_id)
+    current_user = User.query.get(current_user_id)
+    creator = schedule.user
+    
+    if creator.role == 'admin':
+        if current_user.role != 'admin':
+            return jsonify({'error': '只有管理员可以删除公共日程'}), 403
+    else:
+        if schedule.user_id != current_user_id:
+             return jsonify({'error': '无权限'}), 403
          
     db.session.delete(schedule)
     db.session.commit()
@@ -182,8 +194,9 @@ def delete_schedule(id):
 @jwt_required()
 def create_meeting():
     current_user_id = get_jwt_identity()
-    if not check_admin(current_user_id):
-        return jsonify({'error': '无权限'}), 403
+    # 允许所有用户创建会议
+    # if not check_admin(current_user_id):
+    #     return jsonify({'error': '无权限'}), 403
         
     data = request.get_json()
     try:
@@ -206,11 +219,22 @@ def create_meeting():
 @schedule_bp.route('/meetings/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_meeting(id):
-    current_user_id = get_jwt_identity()
-    if not check_admin(current_user_id):
-        return jsonify({'error': '无权限'}), 403
-        
+    current_user_id = int(get_jwt_identity())
+    current_user = User.query.get(current_user_id)
     meeting = Meeting.query.get_or_404(id)
+    
+    # 权限检查
+    # 注意：Meeting 模型可能没有直接的 relationship 到 User (需确认)，但 routes.py 前面 join user 表明有 relationship 或者手动 join
+    # 假设 Meeting.organizer_id 是外键，但我们需要 Role。
+    # 根据 lines 89 `organizer = User.query.get(m.organizer_id)`，我们可以手动 fetch。
+    
+    organizer = User.query.get(meeting.organizer_id)
+    if organizer.role == 'admin':
+        if current_user.role != 'admin':
+            return jsonify({'error': '只有管理员可以修改公共会议'}), 403
+    else:
+        if meeting.organizer_id != current_user_id:
+             return jsonify({'error': '无权限'}), 403
     data = request.get_json()
     
     try:
@@ -238,11 +262,19 @@ def update_meeting(id):
 @schedule_bp.route('/meetings/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_meeting(id):
-    current_user_id = get_jwt_identity()
-    if not check_admin(current_user_id):
-        return jsonify({'error': '无权限'}), 403
-        
+    current_user_id = int(get_jwt_identity())
+    current_user = User.query.get(current_user_id)
     meeting = Meeting.query.get_or_404(id)
+    
+    organizer = User.query.get(meeting.organizer_id)
+    if organizer.role == 'admin':
+        if current_user.role != 'admin':
+            return jsonify({'error': '只有管理员可以删除公共会议'}), 403
+    else:
+        if meeting.organizer_id != current_user_id:
+             return jsonify({'error': '无权限'}), 403
     db.session.delete(meeting)
     db.session.commit()
     return jsonify({'message': '会议删除成功'}), 200
+
+

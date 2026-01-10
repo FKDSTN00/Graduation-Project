@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
-from ..models.models import User
+from ..models.models import User, Role
 from ..extensions import db
 
 auth_bp = Blueprint('auth', __name__)
@@ -25,8 +25,12 @@ def login():
         if not user:
             return jsonify({"msg": "用户不存在", "error": "USER_NOT_FOUND"}), 401
         
+        if user.is_active is False:
+             return jsonify({"msg": "该账户已被封禁", "error": "USER_BANNED"}), 403
+
         if not user.check_password(password):
             return jsonify({"msg": "密码错误", "error": "INVALID_PASSWORD"}), 401
+
         
         access_token = create_access_token(identity=str(user.id))
         return jsonify({
@@ -52,10 +56,17 @@ def register():
         
     user = User(username=data['username'], email=data['email'])
     user.set_password(data['password'])
+    
+    # 分配默认角色: user
+    default_role = Role.query.filter_by(code='user').first()
+    if default_role:
+        user.role_id = default_role.id
+        
     db.session.add(user)
     db.session.commit()
     
     return jsonify({"msg": "用户注册成功"}), 201
+
 
 from ..models.models import ApprovalFlow
 from datetime import datetime, timedelta
@@ -80,12 +91,22 @@ def request_password_reset():
     
     if pending:
         return jsonify({"msg": "您已有一个待处理的重置申请"}), 400
+    
+    # 所有密码重置申请都发给 Admin
+    admin_role = Role.query.filter_by(code='admin').first()
+    if not admin_role:
+        return jsonify({"msg": "系统错误：未找到管理员角色"}), 500
+    
+    admin_user = User.query.filter_by(role_id=admin_role.id).first()
+    if not admin_user:
+        return jsonify({"msg": "系统错误：未找到管理员用户"}), 500
         
-    # Create Approval Request for Admin
+    # Create Approval Request
     title = f"{username}忘记密码，申请重置密码"
     approval = ApprovalFlow(
         title=title,
         applicant_id=user.id,
+        current_approver_id=admin_user.id,
         type='password_reset',
         status='pending',
         details={'reason': '用户忘记密码申请重置', 'target_user_id': user.id},
@@ -96,3 +117,5 @@ def request_password_reset():
     db.session.commit()
     
     return jsonify({"msg": "申请已提交，请等待管理员审核"}), 200
+
+

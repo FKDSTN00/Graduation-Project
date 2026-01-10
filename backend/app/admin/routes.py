@@ -29,16 +29,43 @@ def admin_required(fn):
 @admin_bp.route('/users', methods=['GET'])
 @admin_required
 def list_users():
-    users = User.query.order_by(User.id.asc()).all()
+    dept_id = request.args.get('departmentId')
+    role_id = request.args.get('roleId')
+    
+    query = User.query
+    if dept_id:
+        dept_id = int(dept_id)
+        # 获取该部门及其所有子部门 ID
+        from ..models.models import Department
+        
+        # 递归获取所有子部门ID
+        def get_all_child_dept_ids(parent_id):
+            ids = [parent_id]
+            children = Department.query.filter_by(parent_id=parent_id).all()
+            for child in children:
+                ids.extend(get_all_child_dept_ids(child.id))
+            return ids
+            
+        target_dept_ids = get_all_child_dept_ids(dept_id)
+        query = query.filter(User.department_id.in_(target_dept_ids))
+        
+    if role_id:
+        query = query.filter_by(role_id=role_id)
+        
+    users = query.order_by(User.id.asc()).all()
     result = []
     for u in users:
-        status = 'banned' if u.role == 'banned' else 'normal'
+        # Status determined by is_active first
+        status = 'banned' if u.is_active is False else 'normal'
         result.append({
             'id': u.id,
             'username': u.username,
             'email': u.email,
+            'department_id': u.department_id,
+            'role_id': u.role_id,
             'department': u.department,
             'role': u.role,
+            'avatar': u.avatar,
             'status': status
         })
     return jsonify(result), 200
@@ -50,9 +77,25 @@ def ban_user(user_id):
     data = request.get_json() or {}
     ban = data.get('ban', True)
     user = User.query.get_or_404(user_id)
-    user.role = 'banned' if ban else 'user'
+    user.is_active = not ban
     db.session.commit()
     return jsonify({'msg': '操作成功', 'status': 'banned' if ban else 'normal'}), 200
+
+@admin_bp.route('/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user(user_id):
+    """修改用户信息 (部门/角色)"""
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    if 'departmentId' in data:
+        user.department_id = data['departmentId']
+    if 'roleId' in data:
+        user.role_id = data['roleId']
+        
+    db.session.commit()
+    return jsonify({'msg': '更新成功'})
+
 
 
 @admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
@@ -311,4 +354,6 @@ def delete_monitor_keyword(id):
     db.session.delete(keyword)
     db.session.commit()
     return jsonify({'msg': '删除成功'}), 200
+
+
 

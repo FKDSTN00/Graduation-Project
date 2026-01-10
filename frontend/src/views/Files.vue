@@ -174,6 +174,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css' // 或者其他主题
 
 import { getFiles, createFolder, uploadFile, updateFolder, updateFile, deleteFolder, deleteFile, previewFile, downloadFile } from '../api/files'
+import request from '../api/request'
 
 const props = defineProps({
   embedded: {
@@ -330,13 +331,43 @@ const previewFileItem = async (file) => {
       previewLoading.value = true
       
       try {
-        // 使用 fetch 下载文件
-        const response = await fetch(res.url)
-        if (!response.ok) throw new Error('网络请求失败')
-        const blob = await response.blob()
+        // Switch back to Backend Proxy to avoid Vite proxy dependency
+        // This is more robust as it uses internal Docker network
+        // Note: Backend route is /api/files/files/<id>/proxy, so we need double 'files' path segment
+        const blob = await request.get(`/files/files/${file.id}/proxy`, { responseType: 'blob' })
+        
+        // Check if we got a JSON error response masquerading as a blob
+        if (blob.type === 'application/json') {
+            const text = await blob.text()
+            const errorData = JSON.parse(text)
+            throw new Error(errorData.error || '下载失败')
+        }
+
+        // Diagnostic: Check if we received XML/HTML (MinIO error)
+        if (blob.type.includes('xml') || blob.type.includes('html')) {
+             const text = await blob.text()
+             console.error('Proxy returned XML/HTML:', text)
+             throw new Error(`代理返回了非文件数据 (${blob.type}): ${text.substring(0, 200)}`)
+        }
+        
+        // Diagnostic: Check ZIP Header (PK = 50 4B)
+        const headerBuffer = await blob.slice(0, 2).arrayBuffer()
+        const headerView = new Uint8Array(headerBuffer)
+        if (headerView[0] !== 0x50 || headerView[1] !== 0x4B) {
+            // Check for OLE2 signature (legacy .doc)
+            if (headerView[0] === 0xD0 && headerView[1] === 0xCF) {
+                 throw new Error('该文件似乎是旧版 Word (.doc) 格式（尽管后缀是 .docx）。网页预览仅支持标准 .docx 格式，请下载后查看或转换为 .docx 后上传。')
+            }
+            
+            const text = await blob.text() // Read as text to see if it's an error message
+            console.error('Invalid ZIP header:', headerView, text)
+            // Show start of text to help debug
+            throw new Error(`文件数据头无效 (Hex: ${headerView[0].toString(16)} ${headerView[1].toString(16)}). 可能不是有效的 DOCX 文件. 内容预览: ${text.substring(0, 50)}`)
+        }
+        
         const arrayBuffer = await blob.arrayBuffer()
         
-        // 等待 DOM 更新
+        // Wait for DOM update
         await new Promise(resolve => setTimeout(resolve, 100))
         
         // 使用 docx-preview 渲染
@@ -360,7 +391,18 @@ const previewFileItem = async (file) => {
         }
       } catch (error) {
         console.error('渲染 docx 失败:', error)
-        ElMessage.error('文档渲染失败，可能是跨域问题，请尝试下载查看')
+        let msg = error.message
+        
+        // Try to parse parsing JSON error from Blob response
+        if (error.response && error.response.data instanceof Blob) {
+           try {
+              const text = await error.response.data.text()
+              const json = JSON.parse(text)
+              if (json.error) msg = json.error
+           } catch(e) {}
+        }
+        
+        ElMessage.error(`文档渲染失败: ${msg}`)
         previewVisible.value = false
       } finally {
         previewLoading.value = false
@@ -592,3 +634,10 @@ onMounted(() => {
   text-align: center;
 }
 </style>
+
+
+
+
+
+
+

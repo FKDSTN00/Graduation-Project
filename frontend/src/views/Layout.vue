@@ -93,7 +93,12 @@
             <el-icon><Ticket /></el-icon>
             <span>投票与问卷</span>
           </el-menu-item>
+          <el-menu-item index="/admin/org">
+            <el-icon><Share /></el-icon>
+            <span>组织架构管理</span>
+          </el-menu-item>
           <el-menu-item index="/admin/users">
+
             <el-icon><User /></el-icon>
             <span>用户管理</span>
           </el-menu-item>
@@ -221,7 +226,7 @@ import { useUserStore } from '../store'
 import { 
   House, Document, List, Collection, Files, Calendar, 
   Menu, User, Expand, Fold, Bell, Moon, Sunny,
-  Stamp, Ticket, ChatDotRound, DataBoard, Monitor, RefreshLeft, Cpu 
+  Stamp, Ticket, ChatDotRound, DataBoard, Monitor, RefreshLeft, Cpu, Share, ArrowDown 
 } from '@element-plus/icons-vue'
 
 import { ElMessage, ClickOutside as vClickOutside } from 'element-plus'

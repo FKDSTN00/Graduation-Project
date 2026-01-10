@@ -2,8 +2,8 @@
   <div class="tasks-page">
     <div class="page-header">
       <h2>任务管理</h2>
-      <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon> 新建任务
+      <el-button type="primary" :icon="Plus" @click="openCreateDialog">
+        新建任务
       </el-button>
     </div>
 
@@ -116,13 +116,13 @@
             <el-button 
               type="primary" 
               link 
-              icon="Edit" 
+              :icon="Edit" 
               @click="handleEdit(scope.row)"
             >编辑</el-button>
             <el-button 
               type="danger" 
               link 
-              icon="Delete" 
+              :icon="Delete" 
               @click="handleDelete(scope.row)"
             >删除</el-button>
           </template>
@@ -212,7 +212,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTaskStore } from '../store'
-import { Plus, Calendar, Delete, Edit } from '@element-plus/icons-vue'
+import { Plus, Calendar, Delete, Edit, User as UserIcon } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import request from '../api/request'
@@ -234,6 +234,7 @@ const form = ref({
   relatedDocs: []
 })
 
+
 const rules = {
   title: [{ required: true, message: '请输入任务标题', trigger: 'blur' }],
   priority: [{ required: true, message: '请选择优先级', trigger: 'change' }],
@@ -243,7 +244,12 @@ const rules = {
 // 关联文档相关
 const folders = ref([])
 const selectedFolderId = ref(null)
+
+
 const folderDocs = ref([])
+
+// 用户与评论相关
+const users = ref([])
 
 const loadFolders = async () => {
   try {
@@ -260,6 +266,26 @@ onMounted(async () => {
   // 加载文件夹，用于选择文档
   loadFolders()
 })
+
+const loadUsers = async () => {
+  try {
+     users.value = await request.get('/users/')
+  } catch(e) {}
+}
+
+const submitComment = async () => {
+  if (!newComment.value) return
+  try {
+    const res = await request.post(`/tasks/${editingTaskId.value}/comments`, { content: newComment.value })
+    ElMessage.success('评论已发送')
+    newComment.value = ''
+    // 刷新列表以获取最新评论
+    taskStore.fetchTasks()
+  } catch(e) {
+    ElMessage.error('发送失败')
+  }
+}
+
 
 const loadDocs = async () => {
   try {
@@ -326,6 +352,7 @@ const openCreateDialog = () => {
     notes: '',
     relatedDocs: []
   }
+
   selectedFolderId.value = null
   if (folders.value.length === 0) {
       loadFolders()
@@ -345,6 +372,7 @@ const handleEdit = (task) => {
     notes: task.notes || '',
     relatedDocs: task.relatedDocs || []
   }
+
   selectedFolderId.value = null
   if (folders.value.length === 0) {
       loadFolders()

@@ -25,7 +25,7 @@
               <span class="current-date-title">{{ formatDate(currentDate) }}</span>
               <div class="header-actions">
                 <el-button type="primary" size="small" @click="openCreateDialog('schedule')">创建日程</el-button>
-                <el-button type="success" size="small" @click="openCreateDialog('meeting')" v-if="isAdmin">创建会议</el-button>
+                <el-button type="success" size="small" @click="openCreateDialog('meeting')">创建会议</el-button>
               </div>
             </div>
           </template>
@@ -49,7 +49,7 @@
                     <el-icon><Bell /></el-icon> 提前 {{ formatRemindTime(event.remind_minutes) }} 通知
                   </div>
                 </div>
-                <div class="event-actions" v-if="event.user_id === currentUserId">
+                <div class="event-actions" v-if="(event.type === 'schedule' ? event.user_id : event.organizer_id) === currentUserId">
                   <el-button type="primary" link :icon="Edit" @click.stop="openEditDialog(event)"></el-button>
                   <el-button type="danger" link :icon="Delete" @click.stop="handleDelete(event)"></el-button>
                 </div>
@@ -498,3 +498,4 @@ const resetForm = () => {
     white-space: nowrap;
 }
 </style>
+

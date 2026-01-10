@@ -8,10 +8,20 @@ class User(db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, comment='用户名')
     email = db.Column(db.String(120), unique=True, nullable=False, comment='邮箱')
     password_hash = db.Column(db.String(255), comment='密码哈希')
-    department = db.Column(db.String(64), comment='部门')
-    role = db.Column(db.String(20), default='user', comment='角色: user/admin')
     avatar = db.Column(db.String(500), comment='头像URL')
     privacy_password_hash = db.Column(db.String(255), comment='隐私空间密码哈希')
+
+    # 新增企业级字段
+    department_id = db.Column(db.Integer, db.ForeignKey('department.id', use_alter=True, name='fk_user_dept_id'), comment='部门ID')
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id'), comment='角色ID')
+    is_active = db.Column(db.Boolean, default=True, comment='是否激活/封禁')
+
+
+
+    department_rel = db.relationship('Department', foreign_keys=[department_id], backref='users')
+    role_rel = db.relationship('Role', foreign_keys=[role_id], backref='users')
+
+
 
     def set_password(self, password):
         """设置密码（生成哈希）"""
@@ -25,11 +35,47 @@ class User(db.Model):
         """设置隐私空间密码（生成哈希）"""
         self.privacy_password_hash = generate_password_hash(password)
 
+    @property
+    def role(self):
+        """兼容旧代码：返回角色代码"""
+        return self.role_rel.code if self.role_rel else 'user'
+    
+    @property
+    def department(self):
+        """兼容旧代码：返回部门名称"""
+        return self.department_rel.name if self.department_rel else None
+
     def check_privacy_password(self, password):
         """验证隐私空间密码"""
         if not self.privacy_password_hash:
             return False
         return check_password_hash(self.privacy_password_hash, password)
+
+
+class Department(db.Model):
+    """部门模型"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, comment='部门名称')
+    parent_id = db.Column(db.Integer, db.ForeignKey('department.id'), comment='上级部门ID')
+    manager_id = db.Column(db.Integer, db.ForeignKey('user.id', use_alter=True, name='fk_dept_manager_id'), comment='部门主管ID')
+
+    level = db.Column(db.Integer, default=1, comment='层级')
+    order = db.Column(db.Integer, default=0, comment='排序')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # 自关联
+    parent = db.relationship('Department', remote_side=[id], backref=db.backref('children', lazy='dynamic', order_by='Department.order'))
+
+    manager = db.relationship('User', foreign_keys=[manager_id], backref='managed_departments')
+
+class Role(db.Model):
+    """角色模型"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True, comment='角色名称')
+    code = db.Column(db.String(50), nullable=False, unique=True, comment='角色代码(admin/user/manager)')
+    permissions = db.Column(db.JSON, comment='权限配置') # {"menus": [], "buttons": []}
+    description = db.Column(db.String(255), comment='描述')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Folder(db.Model):
     """文档文件夹"""
@@ -63,10 +109,6 @@ class Document(db.Model):
     
     owner = db.relationship('User', backref='documents')
     folder = db.relationship('Folder', backref='documents')
-
-
-
-
 
 class Schedule(db.Model):
     """个人日程"""
@@ -116,11 +158,16 @@ class ApprovalFlow(db.Model):
     type = db.Column(db.String(50), comment='类型: leave(请假)/reimbursement(报销)/procurement(采购)')
     status = db.Column(db.String(20), default='pending', comment='状态: pending/approved/rejected')
     current_step = db.Column(db.Integer, default=1, comment='当前审批步骤')
+    current_approver_id = db.Column(db.Integer, db.ForeignKey('user.id'), comment='当前审批人ID')
+    
     total_steps = db.Column(db.Integer, default=1, comment='总步骤数')
+
     details = db.Column(db.JSON, comment='申请详情数据')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='申请时间')
 
-    applicant = db.relationship('User', backref='approval_flows')
+    applicant = db.relationship('User', foreign_keys=[applicant_id], backref='approval_flows')
+    current_approver = db.relationship('User', foreign_keys=[current_approver_id], backref='pending_approvals')
+
 
 class Notice(db.Model):
     """公告"""
@@ -137,7 +184,7 @@ class Vote(db.Model):
     """投票/问卷"""
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False, comment='投票标题')
-    options = db.Column(db.JSON, comment='选项列表') # [{"key": "opt1", "label": "选项1"}, ...]
+    options = db.Column(db.JSON, comment='选项列表')
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='创建人ID')
     end_time = db.Column(db.DateTime, comment='截止时间')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
@@ -196,8 +243,6 @@ class MonitorKeyword(db.Model):
     keyword = db.Column(db.String(100), nullable=False, unique=True, comment='监控关键词')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
 
-
-
 class AISession(db.Model):
     """AI 会话"""
     id = db.Column(db.Integer, primary_key=True)
@@ -211,6 +256,7 @@ class AISession(db.Model):
     messages = db.relationship('AIMessage', backref='session', lazy='dynamic', cascade='all, delete-orphan')
 
 class AIMessage(db.Model):
+
     """AI 消息"""
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey('ai_session.id'), nullable=False, comment='会话ID')
@@ -232,6 +278,8 @@ class Task(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment='更新时间')
 
     user = db.relationship('User', backref=db.backref('tasks', lazy='dynamic'))
+
+
 
 class KnowledgeCategory(db.Model):
     """知识库分类"""

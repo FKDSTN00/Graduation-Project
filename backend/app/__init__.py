@@ -58,10 +58,12 @@ def create_app(config_class=Config):
     from .admin import admin_bp
     from .tasks.routes import bp as tasks_bp
     from .knowledge import knowledge_bp
+    from .org import org_bp
 
     # 注册各功能模块的蓝图，并设置 URL 前缀
     app.register_blueprint(auth_bp, url_prefix='/api/auth')       # 认证模块
     app.register_blueprint(users_bp, url_prefix='/api/users')     # 用户管理
+    app.register_blueprint(org_bp, url_prefix='/api/org')         # 组织架构
     app.register_blueprint(admin_bp, url_prefix='/api/admin')     # 管理员
     app.register_blueprint(tasks_bp, url_prefix='/api/tasks')     # 任务管理
     app.register_blueprint(knowledge_bp, url_prefix='/api/knowledge')  # 知识库
@@ -107,3 +109,49 @@ def create_app(config_class=Config):
         print(f"⚠️ Scheduler start failed: {e}")
 
     return app
+
+# Trigger reload
+
+# Trigger reload
+
+# Trigger reload 2
+
+# Trigger reload 3
+
+# Trigger reload 4
+
+# Trigger reload 5
+
+# Trigger reload 6
+
+# Trigger reload 7
+
+# Trigger reload 8
+
+# Trigger reload 9
+
+# Trigger reload 10
+
+# Trigger reload 11
+
+# Trigger reload 12
+
+# Trigger reload 12
+
+# Trigger reload 13
+
+# Trigger reload 14
+
+# Trigger reload 15
+
+# Trigger reload 16
+
+# Trigger reload 17
+
+# Trigger reload 18
+
+# Trigger reload 19
+
+# Trigger reload 20
+
+# Trigger reload 21

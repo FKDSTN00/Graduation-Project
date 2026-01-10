@@ -32,7 +32,7 @@ def create_task():
             related_docs=data.get('relatedDocs', []),  # 前端传 relatedDocs
             user_id=user_id
         )
-        
+
         db.session.add(task)
         db.session.commit()
         
@@ -61,6 +61,7 @@ def get_tasks():
     user_id = get_jwt_identity()
     
     try:
+        # 获取我创建的任务
         tasks = Task.query.filter_by(user_id=user_id).order_by(Task.created_at.desc()).all()
         
         task_list = []
@@ -80,6 +81,7 @@ def get_tasks():
     except Exception as e:
         print(e)
         return jsonify({'code': 500, 'msg': '获取失败'}), 500
+
 
 @bp.route('/<int:task_id>', methods=['PUT'])
 @jwt_required()
@@ -108,7 +110,7 @@ def update_task(task_id):
             task.notes = data['notes']
         if 'relatedDocs' in data:
             task.related_docs = data['relatedDocs']
-            
+        
         db.session.commit()
         
         return jsonify({

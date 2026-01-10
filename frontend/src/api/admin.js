@@ -1,8 +1,13 @@
 import request from './request'
 
-export const fetchUsers = () => {
-  return request.get('/admin/users')
+export const fetchUsers = (params) => {
+  return request.get('/admin/users', { params })
 }
+
+export const updateUser = (userId, data) => {
+  return request.put(`/admin/users/${userId}`, data)
+}
+
 
 export const banUser = (userId, ban = true) => {
   return request.put(`/admin/users/${userId}/ban`, { ban })

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models.models import FileCenterFile, FileCenterFolder, User
 from ..extensions import db
@@ -8,6 +8,21 @@ import os
 from datetime import datetime, timedelta
 
 files_bp = Blueprint('files', __name__)
+import requests
+
+def calculate_folder_size(folder):
+    """Calculates folder size recursively"""
+    total_size = 0
+    # Files in current folder
+    for f in folder.files:
+        if f.size:
+            total_size += f.size
+            
+    # Subfolders
+    for sub in folder.subfolders:
+        total_size += calculate_folder_size(sub)
+        
+    return total_size
 
 @files_bp.route('/list', methods=['GET'])
 @jwt_required()
@@ -31,7 +46,8 @@ def list_files():
             'id': f.id,
             'name': f.name,
             'creator': f.creator.username,
-            'created_at': f.created_at.isoformat()
+            'created_at': f.created_at.isoformat(),
+            'size': calculate_folder_size(f) # Add calculated size
         } for f in folders],
         'files': [{
             'id': f.id,
@@ -253,6 +269,42 @@ def preview_file(id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@files_bp.route('/files/<int:id>/proxy', methods=['GET'])
+@jwt_required(optional=True)
+def proxy_file_content(id):
+    """Backend proxy for file content to avoid CORS"""
+    file = FileCenterFile.query.get_or_404(id)
+    try:
+        # Bypass StorageClient wrapper to get direct internal URL (http://minio:9000/...)
+        url = storage_client.client.get_presigned_url(
+            "GET",
+            storage_client.bucket,
+            file.path,
+            expires=timedelta(hours=1)
+        )
+        
+        # Stream from internal MinIO URL
+        # Use requests module level import
+        req = requests.get(url, stream=True, timeout=60)
+        
+        if req.status_code != 200:
+            current_app.logger.error(f"MinIO fetch failed: {req.text}")
+            return jsonify({'error': f"Upstream error: {req.status_code}"}), 502
+
+        from urllib.parse import quote
+        safe_filename = quote(file.name)
+        
+        return Response(
+            stream_with_context(req.iter_content(chunk_size=4096)),
+            content_type=req.headers.get('content-type', 'application/octet-stream'),
+            headers={
+                'Content-Disposition': f"inline; filename*=UTF-8''{safe_filename}"
+            }
+        )
+    except Exception as e:
+        current_app.logger.error(f"Proxy failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @files_bp.route('/files/<int:id>/download', methods=['GET'])
 @jwt_required()
 def download_file(id):
@@ -263,3 +315,9 @@ def download_file(id):
         return jsonify({'url': url, 'type': file.type, 'name': file.name})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+
+
+
+

@@ -322,8 +322,22 @@
       <!-- 用户管理 -->
       <div v-else-if="activeTab === 'users'">
         <div class="toolbar">
-          <el-input v-model="userKeyword" placeholder="搜索用户名/邮箱" style="width: 240px" clearable />
-          <el-button :loading="loadingUsers" @click="loadUsers">刷新</el-button>
+          <el-input v-model="userKeyword" placeholder="搜索用户名/邮箱" style="width: 200px" clearable />
+          <el-tree-select 
+            v-model="filterDept" 
+            :data="deptOptions" 
+            placeholder="筛选部门" 
+            node-key="id"
+            :props="{ label: 'label' }"
+            clearable 
+            check-strictly 
+            :render-after-expand="false" 
+            style="width: 180px; margin-left: 8px;" 
+          />
+          <el-select v-model="filterRole" placeholder="筛选角色" clearable style="width: 150px; margin-left: 8px;">
+             <el-option v-for="r in roleOptions" :key="r.id" :label="r.name" :value="r.id" />
+          </el-select>
+          <el-button :loading="loadingUsers" @click="loadUsers" style="margin-left: 8px;">刷新</el-button>
         </div>
         <el-table :data="filteredUsers" style="width: 100%" border :loading="loadingUsers">
           <el-table-column prop="username" label="用户名" width="140" />
@@ -337,9 +351,10 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="260">
+          <el-table-column label="操作" width="280">
             <template #default="scope">
               <el-button size="small" @click="viewUserDocs(scope.row)">查看文档</el-button>
+              <el-button size="small" type="primary" link @click="openEditUser(scope.row)">编辑</el-button>
               <el-button size="small" :type="scope.row.status === 'normal' ? 'danger' : 'success'" @click="toggleBan(scope.row)">
                 {{ scope.row.status === 'normal' ? '封禁' : '解封' }}
               </el-button>
@@ -347,6 +362,38 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <el-dialog v-model="userEditDialogVisible" title="编辑用户" width="400px">
+           <el-form :model="userEditForm" label-width="80px">
+              <el-form-item label="用户名">
+                 <el-input v-model="userEditForm.username" disabled />
+              </el-form-item>
+               <el-form-item label="部门">
+                  <el-tree-select 
+                    v-model="userEditForm.departmentId" 
+                    :data="deptOptions" 
+                    node-key="id"
+                    :props="{ label: 'label' }"
+                    check-strictly 
+                    :render-after-expand="false" 
+                    style="width: 100%"
+                    clearable
+                    placeholder="请选择部门（可留空）"
+                  />
+               </el-form-item>
+               <el-form-item label="角色">
+                  <el-select v-model="userEditForm.roleId" style="width: 100%">
+                     <el-option v-for="r in roleOptions" :key="r.id" :label="r.name" :value="r.id" />
+                  </el-select>
+               </el-form-item>
+           </el-form>
+           <template #footer>
+               <span class="dialog-footer">
+                   <el-button @click="userEditDialogVisible = false">取消</el-button>
+                   <el-button type="primary" @click="submitEditUser">保存</el-button>
+               </span>
+           </template>
+        </el-dialog>
       </div>
 
       <!-- 留言与反馈 -->
@@ -395,16 +442,22 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import dayjs from 'dayjs'
-import { fetchUsers, banUser, deleteUser as apiDeleteUser, fetchUserDocs, fetchAdminTasks, monitorDocuments, exportBackup, importBackup, getMonitorKeywords, addMonitorKeyword as apiAddMonitorKeyword, deleteMonitorKeyword as apiDeleteMonitorKeyword } from '../api/admin'
+import { fetchUsers, banUser, updateUser, deleteUser as apiDeleteUser, fetchUserDocs, fetchAdminTasks, monitorDocuments, exportBackup, importBackup, getMonitorKeywords, addMonitorKeyword as apiAddMonitorKeyword, deleteMonitorKeyword as apiDeleteMonitorKeyword } from '../api/admin'
+
 import { getCategories, createCategory, updateCategory, deleteCategory as apiDeleteCategory, getArticles, createArticle, updateArticle, deleteArticle as apiDeleteArticle } from '../api/knowledge'
 import { defineAsyncComponent } from 'vue'
+import request from '../api/request'
 const FileCenter = defineAsyncComponent(() => import('./Files.vue'))
+
 const Schedule = defineAsyncComponent(() => import('./Schedule.vue'))
 const Approval = defineAsyncComponent(() => import('./Approval.vue'))
 const AnnouncementManager = defineAsyncComponent(() => import('./AnnouncementManager.vue'))
 const Votes = defineAsyncComponent(() => import('./Votes.vue'))
+
 const Feedback = defineAsyncComponent(() => import('./Feedback.vue'))
 import { Delete, Rank, Close, Edit } from '@element-plus/icons-vue'
+import { createEditor, createToolbar } from '@wangeditor/editor'
+import '@wangeditor/editor/dist/css/style.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -432,8 +485,15 @@ const pageTitle = computed(() => titleMap[activeTab.value] || '管理员后台')
 const users = ref([])
 const loadingUsers = ref(false)
 const userKeyword = ref('')
+const filterDept = ref(null)
+const filterRole = ref(null)
+const deptOptions = ref([])
+const roleOptions = ref([])
+const userEditDialogVisible = ref(false)
+const userEditForm = ref({ id: null, username: '', departmentId: null, roleId: null })
 const docDrawerVisible = ref(false)
 const currentUserDocs = ref([])
+
 
 // Monitor Data
 const flaggedDocs = ref([])
@@ -474,8 +534,10 @@ const totalArticleCount = computed(() => {
 // Lifecycle
 onMounted(() => {
   if (activeTab.value === 'users') {
+    loadDeptAndRoles()
     loadUsers()
   }
+
   if (activeTab.value === 'kanban') {
     loadAdminTasks()
   }
@@ -513,10 +575,24 @@ watch(activeTab, (newTab) => {
 })
 
 // Actions
+const loadDeptAndRoles = async () => {
+
+    try {
+        const d = await request.get('/org/departments/tree')
+        deptOptions.value = d
+        const r = await request.get('/org/roles')
+        roleOptions.value = r
+    } catch(e) {}
+}
+
 const loadUsers = async () => {
   loadingUsers.value = true
   try {
-    const res = await fetchUsers()
+    const params = {}
+    if (filterDept.value) params.departmentId = filterDept.value
+    if (filterRole.value) params.roleId = filterRole.value
+    
+    const res = await fetchUsers(params)
     users.value = res
   } catch (error) {
     ElMessage.error(error.response?.data?.msg || '加载用户失败')
@@ -524,6 +600,31 @@ const loadUsers = async () => {
     loadingUsers.value = false
   }
 }
+
+const openEditUser = (user) => {
+    userEditForm.value = { 
+        id: user.id, 
+        username: user.username, 
+        departmentId: user.department_id, 
+        roleId: user.role_id 
+    }
+    userEditDialogVisible.value = true
+}
+
+const submitEditUser = async () => {
+    try {
+        await updateUser(userEditForm.value.id, {
+            departmentId: userEditForm.value.departmentId,
+            roleId: userEditForm.value.roleId
+        })
+        ElMessage.success('更新成功')
+        userEditDialogVisible.value = false
+        loadUsers()
+    } catch(e) {
+        ElMessage.error(e.response?.data?.msg || '更新失败')
+    }
+}
+
 
 // Kanban Logic
 const adminTasks = ref([])
@@ -897,12 +998,14 @@ const initKnowledgeEditor = () => {
     knowledgeEditor = null
   }
 
-  if (typeof window.wangEditor === 'undefined') {
-    console.error('wangEditor 未加载')
-    return
+  if (knowledgeEditor) {
+    knowledgeEditor.destroy()
+    knowledgeEditor = null
   }
+
+  // Imported from npm now, so no need to check window.wangEditor
+  // const { createEditor, createToolbar } = window.wangEditor
   
-  const { createEditor, createToolbar } = window.wangEditor
   const container = document.getElementById('knowledge-editor')
   if (!container) return
   
@@ -1364,3 +1467,4 @@ const formatTime = (val) => dayjs(val).format('YYYY-MM-DD HH:mm:ss')
   background-color: var(--el-fill-color-light) !important;
 }
 </style>
+

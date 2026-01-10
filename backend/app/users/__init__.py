@@ -218,3 +218,14 @@ def clear_all_notifications():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+@users_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_all_users():
+    """获取所有简单用户信息 (用于选择)"""
+    users = User.query.all()
+    return jsonify([{
+        'id': u.id,
+        'username': u.username,
+        'avatar': u.avatar
+    } for u in users])

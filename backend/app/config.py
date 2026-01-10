@@ -9,7 +9,8 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key'
     
     # 数据库连接 URI
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///app.db'
+    # 默认为本地开发环境常用的 MySQL 配置，或通过环境变量 DATABASE_URL 设置
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://user:user@localhost:3306/db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT 密钥
@@ -43,7 +44,8 @@ class Config:
     # Email Configuration
     MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.qq.com'
     MAIL_PORT = int(os.environ.get('MAIL_PORT') or 465)
-    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL') == 'True' or True
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'True') in ['True', 'true', '1', 'yes']
+    MAIL_USE_TLS = False  # QQ邮箱使用SSL，不用TLS
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'your_email@qq.com'
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'your_auth_code'
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'your_email@qq.com'
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or os.environ.get('MAIL_USERNAME') or 'your_email@qq.com'

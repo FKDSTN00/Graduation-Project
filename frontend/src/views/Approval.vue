@@ -6,7 +6,7 @@
         <p class="subtitle">管理和查看所有的审批申请</p>
       </div>
       <el-button
-        v-if="userStore.userInfo?.role === 'user'"
+        v-if="userStore.userInfo?.role !== 'admin'"
         type="primary"
         class="create-btn"
         @click="openCreateDialog"
@@ -19,7 +19,149 @@
 
     <!-- Application List -->
     <div v-loading="loading" class="list-container">
-      <el-collapse v-model="activeNames">
+      <!-- Manager/Lead 双面板布局 -->
+      <div v-if="['manager', 'lead'].includes(userStore.userInfo?.role)" class="dual-panel-layout">
+        <!-- 左侧：审批面板 (2/3) - 和user界面一模一样 -->
+        <div class="approval-panel">
+          <el-collapse v-model="activeNames">
+            <el-collapse-item title="未处理" name="pending">
+              <template #title>
+                <span class="collapse-title">未处理 ({{ toApproveList.length }})</span>
+              </template>
+              <div v-if="toApproveList.length === 0" class="empty-state">
+                <el-empty description="暂无未处理申请" :image-size="80" />
+              </div>
+              <div v-else class="grid-layout">
+                <el-card
+                  v-for="item in toApproveList"
+                  :key="item.id"
+                  class="approval-card"
+                  shadow="hover"
+                  @click="openDetailDialog(item)"
+                >
+                  <div class="card-header-custom">
+                    <div class="user-info">
+                      <el-avatar :src="item.applicant.avatar || defaultAvatar" :size="40">
+                        {{ item.applicant.username?.charAt(0).toUpperCase() }}
+                      </el-avatar>
+                      <div class="meta">
+                        <span class="username">{{ item.applicant.username }}</span>
+                        <span class="email">{{ item.applicant.email }}</span>
+                      </div>
+                    </div>
+                    <el-tag :type="getStatusType(item.status)" effect="dark" class="status-tag">
+                      {{ getStatusLabel(item.status) }}
+                    </el-tag>
+                  </div>
+                  
+                  <div class="card-body">
+                    <div class="info-row">
+                      <span class="label">申请类别:</span>
+                      <span class="value">{{ getTypeLabel(item.type) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="label">提交时间:</span>
+                      <span class="value">{{ formatDate(item.created_at) }}</span>
+                    </div>
+                    <div class="info-row">
+                       <span class="label">当前审批人:</span>
+                       <span class="value">{{ item.current_approver ? item.current_approver.username : '-' }}</span>
+                    </div>
+                  </div>
+                </el-card>
+              </div>
+            </el-collapse-item>
+
+            <el-collapse-item title="已处理" name="processed">
+              <template #title>
+                 <div class="collapse-header-wrapper">
+                   <span class="collapse-title">已处理 ({{ processedToApproveList.length }})</span>
+                   <el-button 
+                     v-if="processedToApproveList.length > 0"
+                     type="danger" 
+                     link 
+                     size="small" 
+                     @click.stop="handleClearProcessed"
+                   >
+                     清空记录
+                   </el-button>
+                 </div>
+              </template>
+              <div v-if="processedToApproveList.length === 0" class="empty-state">
+                <el-empty description="暂无已处理申请" :image-size="80" />
+              </div>
+              <div v-else class="grid-layout">
+                <el-card
+                  v-for="item in processedToApproveList"
+                  :key="item.id"
+                  class="approval-card"
+                  shadow="hover"
+                  @click="openDetailDialog(item)"
+                >
+                  <div class="card-header-custom">
+                    <div class="user-info">
+                      <el-avatar :src="item.applicant.avatar || defaultAvatar" :size="40">
+                        {{ item.applicant.username?.charAt(0).toUpperCase() }}
+                      </el-avatar>
+                      <div class="meta">
+                        <span class="username">{{ item.applicant.username }}</span>
+                        <span class="email">{{ item.applicant.email }}</span>
+                      </div>
+                    </div>
+                    <el-tag :type="getStatusType(item.status)" effect="dark" class="status-tag">
+                      {{ getStatusLabel(item.status) }}
+                    </el-tag>
+                  </div>
+                  
+                  <div class="card-body">
+                    <div class="info-row">
+                      <span class="label">申请类别:</span>
+                      <span class="value">{{ getTypeLabel(item.type) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="label">提交时间:</span>
+                      <span class="value">{{ formatDate(item.created_at) }}</span>
+                    </div>
+                  </div>
+                </el-card>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+        </div>
+
+        <!-- 右侧：我的申请 (1/3) -->
+        <div class="my-applications-panel">
+          <el-card shadow="hover" class="my-applications-card">
+            <template #header>
+              <div class="panel-header">
+                <h3>我的申请 ({{ myApplicationsList.length }})</h3>
+              </div>
+            </template>
+            <div v-if="myApplicationsList.length === 0" class="empty-state">
+              <el-empty description="暂无申请记录" :image-size="60" />
+            </div>
+            <div v-else class="my-list">
+              <div
+                v-for="item in myApplicationsList"
+                :key="item.id"
+                class="my-application-item"
+                @click="openDetailDialog(item)"
+              >
+                <div class="item-header">
+                  <span class="type-label">{{ getTypeLabel(item.type) }}</span>
+                  <el-tag :type="getStatusType(item.status)" size="small" effect="plain">
+                    {{ getStatusLabel(item.status) }}
+                  </el-tag>
+                </div>
+                <div class="item-time">{{ formatDate(item.created_at) }}</div>
+              </div>
+            </div>
+          </el-card>
+        </div>
+      </div>
+
+      <!-- User/Admin 单面板布局 -->
+      <el-collapse v-else v-model="activeNames">
         <el-collapse-item title="未处理" name="pending">
           <template #title>
              <span class="collapse-title">未处理 ({{ pendingApprovals.length }})</span>
@@ -59,6 +201,10 @@
                   <span class="label">提交时间:</span>
                   <span class="value">{{ formatDate(item.created_at) }}</span>
                 </div>
+                <div class="info-row">
+                   <span class="label">当前审批人:</span>
+                   <span class="value">{{ item.current_approver ? item.current_approver.username : '-' }}</span>
+                </div>
               </div>
             </el-card>
           </div>
@@ -69,7 +215,7 @@
              <div class="collapse-header-wrapper">
                <span class="collapse-title">已处理 ({{ processedApprovals.length }})</span>
                <el-button 
-                 v-if="userStore.userInfo?.role === 'admin' && processedApprovals.length > 0"
+                 v-if="processedApprovals.length > 0"
                  type="danger" 
                  link 
                  size="small" 
@@ -219,12 +365,16 @@
           </el-descriptions-item>
           
           <el-descriptions-item label="申请时间">{{ formatDate(selectedApproval.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="当前审批人" v-if="selectedApproval.status === 'pending'">
+              {{ selectedApproval.current_approver ? selectedApproval.current_approver.username : '系统/管理员' }}
+          </el-descriptions-item>
         </el-descriptions>
+
 
       </div>
       <template #footer>
-        <!-- Admin Actions -->
-        <div v-if="userStore.userInfo?.role === 'admin' && selectedApproval?.status === 'pending'" class="dialog-actions">
+        <!-- Approver Actions (Admin/Manager/Lead) -->
+        <div v-if="canApprove(selectedApproval)" class="dialog-actions">
            <el-button type="danger" @click="handleAction(selectedApproval.id, 'reject')">拒绝</el-button>
            <el-button type="success" @click="handleAction(selectedApproval.id, 'approve')">同意</el-button>
         </div>
@@ -257,6 +407,40 @@ const pendingApprovals = computed(() => {
 const processedApprovals = computed(() => {
   return approvals.value.filter(item => item.status !== 'pending')
 })
+
+// Manager/Lead 专用：待审批列表（发给我审批的）
+const toApproveList = computed(() => {
+  const currentUserId = userStore.userInfo?.id
+  return approvals.value.filter(item => 
+    item.status === 'pending' && 
+    item.current_approver?.id === currentUserId &&
+    item.applicant.id !== currentUserId  // 排除自己审自己的
+  )
+})
+
+// Manager/Lead 专用：我的申请列表（我发起的）
+const myApplicationsList = computed(() => {
+  const currentUserId = userStore.userInfo?.id
+  return approvals.value.filter(item => 
+    item.applicant.id === currentUserId
+  )
+})
+
+// Manager/Lead 专用：已处理的审批列表（我审批过的）
+const processedToApproveList = computed(() => {
+  const currentUserId = userStore.userInfo?.id
+  return approvals.value.filter(item => 
+    item.status !== 'pending' && 
+    item.current_approver?.id === currentUserId
+  )
+})
+
+// 判断当前用户是否可以审批该申请
+const canApprove = (approval) => {
+  if (!approval || approval.status !== 'pending') return false
+  const currentUserId = userStore.userInfo?.id
+  return approval.current_approver?.id === currentUserId
+}
 
 const createDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
@@ -356,19 +540,30 @@ const openDetailDialog = (item) => {
 }
 
 const handleAction = async (id, action) => {
+  // 密码重置的同意操作需要输入新密码
   if (selectedApproval.value?.type === 'password_reset' && action === 'approve') {
     ElMessageBox.prompt('请输入为用户重置的新密码', '重置密码', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       inputPattern: /^.{6,}$/,
       inputErrorMessage: '密码长度至少6位',
-      inputType: 'text' // Plain text to see what they are typing, or password if preferred. User usually wants to clearly see the generated pw.
+      inputType: 'text'
     }).then(async ({ value }) => {
       try {
         await request.put(`/approval/${id}/status`, { action, new_password: value })
-        ElMessage.success('已重置密码并发送邮件')
         detailDialogVisible.value = false
         fetchApprovals()
+        
+        // 显示新密码信息，方便管理员通知用户
+        ElMessageBox.alert(
+          `用户 ${selectedApproval.value.applicant.username} 的密码已重置为：\n\n${value}\n\n请通知用户使用新密码登录。`,
+          '密码重置成功',
+          {
+            confirmButtonText: '我知道了',
+            type: 'success',
+            dangerouslyUseHTMLString: false
+          }
+        )
       } catch (error) {
         console.error(error)
         ElMessage.error(error.response?.data?.msg || '操作失败')
@@ -377,6 +572,7 @@ const handleAction = async (id, action) => {
     return
   }
 
+  // 标准审批流程（包括密码重置的拒绝）
   try {
     await updateApprovalStatus(id, action)
     ElMessage.success(action === 'approve' ? '已同意该申请' : '已拒绝该申请')
@@ -583,6 +779,93 @@ onMounted(() => {
 /* Custom spacing for dialog */
 .mt-4 {
   margin-top: 24px !important;
+}
+
+/* Dual Panel Layout for Manager/Lead */
+.dual-panel-layout {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 200px);
+}
+
+.approval-panel {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.approval-panel :deep(.el-collapse),
+.approval-panel :deep(.el-collapse-item__wrap) {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.my-applications-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.my-applications-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.my-applications-card :deep(.el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.my-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.my-application-item {
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.my-application-item:hover {
+  background-color: var(--el-fill-color-light);
+  border-color: var(--el-color-primary);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.type-label {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+
+.item-time {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .mr-1 {

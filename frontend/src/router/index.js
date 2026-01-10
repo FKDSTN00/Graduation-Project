@@ -132,6 +132,13 @@ const router = createRouter({
                     meta: { title: '管理员后台', requiresAdmin: true }
                 },
                 {
+                    path: 'admin/org',
+                    name: 'admin-org',
+                    component: () => import('../views/OrgStructure.vue'),
+                    meta: { title: '组织架构', requiresAdmin: true }
+                },
+
+                {
                     path: 'personal-center',
                     name: 'personal-center',
                     component: PersonalCenter,
